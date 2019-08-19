@@ -1,0 +1,44 @@
+{
+  "name": "smart-cache",
+  "version": "1.0.0",
+  "description": "Cache invalidation tools for apollo-client's in-memory-cache.",
+  "main": "lib/index.js",
+  "module": "es/index.js",
+  "unpkg": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "apollo-client",
+    "cache"
+  ],
+  "author": "SmartX",
+  "contributors": [
+    "Ji Ye <yeji@smartx.com>",
+    "Yanzhen Yu <yanzhen@smartx.com>"
+  ],
+  "license": "MIT",
+  "files": [
+    "dist",
+    "es",
+    "lib",
+    "typings"
+  ],
+  "devDependencies": {
+    "@types/chai": "^4.1.7",
+    "@types/mocha": "^5.2.7",
+    "@typescript-eslint/eslint-plugin": "^1.11.0",
+    "@typescript-eslint/parser": "^1.11.0",
+    "chai": "^4.2.0",
+    "cross-env": "^5.2.0",
+    "eslint": "^6.0.1",
+    "eslint-config-prettier": "^6.0.0",
+    "mocha": "^6.1.4",
+    "release-it": "^12.3.2",
+    "rollup": "^1.16.7",
+    "rollup-plugin-terser": "^5.1.1",
+    "rollup-plugin-typescript2": "^0.21.2",
+    "ts-node": "^8.3.0",
+    "typescript": "^3.5.3"
+  }
+}
