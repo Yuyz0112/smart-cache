@@ -11,7 +11,7 @@ import { QueryInfo } from 'apollo-client/core/QueryManager'
 
 export type TypeFieldMap = Map<
   string,
-  { relatedTypes: Set<string>; relatedQueries: Set<string> }
+  { dependentTypes: Set<string>; dependentQueries: Set<string> }
 >
 
 type GetVariables = (
@@ -146,13 +146,13 @@ export function patch(
       }
       for (const query of Object.keys(cacheData['ROOT_QUERY']!)) {
         const currentQuery = query.split('(')[0]
-        if (filedsForDelete.relatedQueries.has(currentQuery)) {
+        if (filedsForDelete.dependentQueries.has(currentQuery)) {
           store.delete(`ROOT_QUERY.${query}`)
         }
       }
       for (const topKey of Object.keys(cacheData)) {
         const currentTopKeyType = topKey.split(':')[0]
-        if (filedsForDelete.relatedTypes.has(currentTopKeyType)) {
+        if (filedsForDelete.dependentTypes.has(currentTopKeyType)) {
           store.delete(topKey)
           deletedTopKeys.push(topKey)
         }

@@ -1,38 +1,38 @@
 export type TypeFieldMap = Map<
   string,
-  { relatedTypes: Set<string>; relatedQueries: Set<string> }
+  { dependentTypes: Set<string>; dependentQueries: Set<string> }
 >
 
 export const typeFieldMap: TypeFieldMap = new Map<
   string,
-  { relatedTypes: Set<string>; relatedQueries: Set<string> }
+  { dependentTypes: Set<string>; dependentQueries: Set<string> }
 >([
   [
     'User',
     {
-      relatedTypes: new Set(['User', 'Nested']),
-      relatedQueries: new Set(['getUser', 'nested']),
+      dependentTypes: new Set(['User', 'Nested']),
+      dependentQueries: new Set(['getUser', 'nested']),
     },
   ],
   [
     'Post',
     {
-      relatedTypes: new Set(['Post', 'User', 'Nested']),
-      relatedQueries: new Set(['getUser', 'getPosts', 'nested']),
+      dependentTypes: new Set(['Post', 'User', 'Nested']),
+      dependentQueries: new Set(['getUser', 'getPosts', 'nested']),
     },
   ],
   [
     'Fuzzy',
     {
-      relatedTypes: new Set(['Fuzzy', 'Nested']),
-      relatedQueries: new Set(['fuzzy', 'nested']),
+      dependentTypes: new Set(['Fuzzy', 'Nested']),
+      dependentQueries: new Set(['fuzzy', 'nested']),
     },
   ],
   [
     'Nested',
     {
-      relatedTypes: new Set(['Nested']),
-      relatedQueries: new Set(['nested']),
+      dependentTypes: new Set(['Nested']),
+      dependentQueries: new Set(['nested']),
     },
   ],
 ])

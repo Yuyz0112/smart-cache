@@ -4,6 +4,7 @@ import pkg from './package.json'
 
 const globals = {
   'apollo-cache-inmemory': 'apollo-cache-inmemory',
+  graphql: 'graphql',
 }
 
 export default [
