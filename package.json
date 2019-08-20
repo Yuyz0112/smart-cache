@@ -6,6 +6,9 @@
   "module": "es/index.js",
   "unpkg": "dist/index.js",
   "scripts": {
+    "build": "rollup --config",
+    "typings": "tsc -d --emitDeclarationOnly --declarationDir typings",
+    "release": "release-it",
     "test": "cross-env TS_NODE_CACHE=false TS_NODE_FILES=true mocha -r ts-node/register test/**/*.spec.ts"
   },
   "keywords": [
