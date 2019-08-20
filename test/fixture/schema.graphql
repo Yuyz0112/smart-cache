@@ -3,6 +3,7 @@ type Query {
   getPosts(page: Int!): [Post!]!
   fuzzy: [Fuzzy!]!
   nested: Nested!
+  noId: NoId
 }
 
 type Mutation {
@@ -30,4 +31,8 @@ type Nested {
   users: [User!]!
   posts: [Post!]!
   fuzzy: [Fuzzy!]!
+}
+
+type NoId {
+  content: String!
 }

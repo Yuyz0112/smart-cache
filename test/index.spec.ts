@@ -32,6 +32,7 @@ const fixture = {
       content: 'Post:1',
     },
   ],
+  noIds: [{ id: 'a', content: 'no id' }],
 }
 let db = JSON.parse(JSON.stringify(fixture)) as typeof fixture
 function restoreDB() {
@@ -61,6 +62,9 @@ const link = new SchemaLink({
             posts: db.posts,
             fuzzy: db.fuzzy,
           }
+        },
+        noId() {
+          return db.noIds[0]
         },
       },
       Mutation: {
@@ -321,6 +325,25 @@ describe('cache invalidation', () => {
       'User:2',
       'Post:1',
       'Post:2',
+    ])
+  })
+
+  it('can delete entity without id', async () => {
+    await client.query({
+      query: gql`
+        query {
+          noId {
+            # id
+            content
+          }
+        }
+      `,
+    })
+    haveProps(client.cache.extract(), ['ROOT_QUERY.noId', '$ROOT_QUERY.noId'])
+    client.deleteCache('NoId')
+    notHaveProps(client.cache.extract(), [
+      'ROOT_QUERY.noId',
+      '$ROOT_QUERY.noId',
     ])
   })
 })

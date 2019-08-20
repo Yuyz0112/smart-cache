@@ -35,4 +35,11 @@ export const typeFieldMap: TypeFieldMap = new Map<
       dependentQueries: new Set(['nested']),
     },
   ],
+  [
+    'NoId',
+    {
+      dependentTypes: new Set(['NoId']),
+      dependentQueries: new Set(['noId']),
+    },
+  ],
 ])
