@@ -66,6 +66,9 @@ const link = new SchemaLink({
         noId() {
           return db.noIds[0]
         },
+        emptyUsers() {
+          return []
+        },
       },
       Mutation: {
         deletePost(parent, args) {
@@ -466,6 +469,34 @@ describe('refetch when cache removed', () => {
           expect(callTime).to.equal(1)
           done()
         }, 0)
+      })
+  })
+
+  it('will notify active query which has empty result before', done => {
+    let callTime = 0
+    client
+      .watchQuery({
+        query: gql`
+          query {
+            emptyUsers {
+              id
+            }
+          }
+        `,
+      })
+      .subscribe(result => {
+        callTime++
+        expect(result.data.emptyUsers).to.deep.equal([])
+        switch (callTime) {
+          case 1:
+            client.deleteCache('User')
+            break
+          case 2:
+            done()
+            break
+          default:
+            break
+        }
       })
   })
 })

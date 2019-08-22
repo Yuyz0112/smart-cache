@@ -4,6 +4,7 @@ type Query {
   fuzzy: [Fuzzy!]!
   nested: Nested!
   noId: NoId
+  emptyUsers: [User!]!
 }
 
 type Mutation {

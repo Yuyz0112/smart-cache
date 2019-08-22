@@ -37,6 +37,24 @@ declare module 'apollo-client' {
   }
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function omit(obj: any, remove: string[] | string) {
+  const result: any = {}
+  if (typeof remove === 'string') {
+    remove = [].slice.call(arguments, 1)
+  }
+
+  for (const prop in obj) {
+    if (!obj.hasOwnProperty || obj.hasOwnProperty(prop)) {
+      if (remove.indexOf(prop) === -1) {
+        result[prop] = obj[prop]
+      }
+    }
+  }
+  return result
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 const checkValueFromAnyObject = (
   target: string,
   valueToBeChecked: StoreValue
@@ -97,7 +115,8 @@ const basicInvalidateCache = (
   for (const queryName of Object.keys(rootQuery)) {
     for (const deletedKey of deletedTopKeys) {
       if (checkValueFromAnyObject(deletedKey, rootQuery[queryName])) {
-        store.delete(`ROOT_QUERY.${queryName}`)
+        const storeObject = store.get('ROOT_QUERY')
+        store.set('ROOT_QUERY', omit(storeObject, queryName))
         deletedQueryNames.push(queryName.split('(')[0])
       }
     }
@@ -106,7 +125,8 @@ const basicInvalidateCache = (
   for (const key of deletedQueryNames) {
     for (const queryName of Object.keys(rootQuery)) {
       if (queryName.includes(key)) {
-        delete rootQuery[queryName]
+        const storeObject = store.get('ROOT_QUERY')
+        store.set('ROOT_QUERY', omit(storeObject, queryName))
       }
     }
   }
@@ -147,7 +167,8 @@ export function patch(
       for (const query of Object.keys(cacheData['ROOT_QUERY']!)) {
         const currentQuery = query.split('(')[0]
         if (filedsForDelete.dependentQueries.has(currentQuery)) {
-          store.delete(`ROOT_QUERY.${query}`)
+          const storeObject = store.get('ROOT_QUERY')
+          store.set('ROOT_QUERY', omit(storeObject, query))
         }
       }
       for (const topKey of Object.keys(cacheData)) {
