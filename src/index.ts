@@ -1,4 +1,4 @@
-import { StoreValue } from 'apollo-utilities'
+import { StoreValue, IdValue } from 'apollo-utilities'
 import {
   InMemoryCache,
   NormalizedCacheObject,
@@ -35,6 +35,18 @@ declare module 'apollo-client' {
   interface ApolloClient<TCacheShape> {
     deleteCache(typeName: string, value?: IdGetterObj): void
   }
+}
+
+// If the scalar value is a JSON blob, type will be { type: 'json', json: value }
+const checkValueTypeOfIdValue = (value: StoreValue) => {
+  if (typeof value !== 'object') {
+    return false
+  }
+  if (Array.isArray(value)) {
+    if (!value.length) return false
+    return (value[0] as { [key: string]: any })['type'] === 'id' // eslint-disable-line @typescript-eslint/no-explicit-any
+  }
+  return (value as { [key: string]: any })['type'] === 'id' // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -143,7 +155,7 @@ export function patch(
   InMemoryCache.prototype.delete = function(
     this: InMemoryCache,
     typeName: string,
-    value: IdGetterObj
+    value?: IdGetterObj
   ) {
     const store: DepTrackingCache = this['data']
     const cacheData: NormalizedCacheObject = store['data']
@@ -168,6 +180,15 @@ export function patch(
         const currentQuery = query.split('(')[0]
         if (filedsForDelete.dependentQueries.has(currentQuery)) {
           const storeObject = store.get('ROOT_QUERY')
+          if (checkValueTypeOfIdValue(storeObject[query])) {
+            if (Array.isArray(storeObject[query])) {
+              ;(storeObject[query] as IdValue[]).forEach(e =>
+                store.delete(e.id)
+              )
+            } else {
+              store.delete((storeObject[query] as IdValue).id)
+            }
+          }
           store.set('ROOT_QUERY', omit(storeObject, query))
         }
       }

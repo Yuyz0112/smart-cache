@@ -342,11 +342,12 @@ describe('cache invalidation', () => {
         }
       `,
     })
-    haveProps(client.cache.extract(), ['ROOT_QUERY.noId', '$ROOT_QUERY.noId'])
+    expect(client.cache.extract()['$ROOT_QUERY.noId']).to.not.be.undefined
+    haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
     client.deleteCache('NoId')
+    expect(client.cache.extract()['$ROOT_QUERY.noId']).to.be.undefined
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.noId',
-      '$ROOT_QUERY.noId',
     ])
   })
 })
