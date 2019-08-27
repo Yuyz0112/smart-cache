@@ -38,15 +38,21 @@ declare module 'apollo-client' {
 }
 
 // If the scalar value is a JSON blob, type will be { type: 'json', json: value }
-const checkValueTypeOfIdValue = (value: StoreValue) => {
-  if (typeof value !== 'object') {
+const isIdValue = (value: StoreValue): value is IdValue => {
+  if (typeof value !== 'object' || !value) {
     return false
   }
-  if (Array.isArray(value)) {
-    if (!value.length) return false
-    return (value[0] as { [key: string]: any })['type'] === 'id' // eslint-disable-line @typescript-eslint/no-explicit-any
+  if ('type' in value) {
+    return value.type === 'id'
   }
-  return (value as { [key: string]: any })['type'] === 'id' // eslint-disable-line @typescript-eslint/no-explicit-any
+  return false
+}
+
+const isIdValueArray = (value: StoreValue): value is IdValue[] => {
+  if (!Array.isArray(value) || !value.length) {
+    return false
+  }
+  return isIdValue(value[0])
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -180,14 +186,11 @@ export function patch(
         const currentQuery = query.split('(')[0]
         if (filedsForDelete.dependentQueries.has(currentQuery)) {
           const storeObject = store.get('ROOT_QUERY')
-          if (checkValueTypeOfIdValue(storeObject[query])) {
-            if (Array.isArray(storeObject[query])) {
-              ;(storeObject[query] as IdValue[]).forEach(e =>
-                store.delete(e.id)
-              )
-            } else {
-              store.delete((storeObject[query] as IdValue).id)
-            }
+          const queryResult = storeObject[query]
+          if (isIdValueArray(queryResult)) {
+            queryResult.forEach(e => store.delete(e.id))
+          } else if (isIdValue(queryResult)) {
+            store.delete(queryResult.id)
           }
           store.set('ROOT_QUERY', omit(storeObject, query))
         }
