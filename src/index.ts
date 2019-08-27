@@ -52,7 +52,7 @@ const isIdValueArray = (value: StoreValue): value is IdValue[] => {
   if (!Array.isArray(value) || !value.length) {
     return false
   }
-  return isIdValue(value[0])
+  return isIdValue(value[0]) // union value can only include Object types, so no need to check every item in arrary
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
