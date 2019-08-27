@@ -342,10 +342,10 @@ describe('cache invalidation', () => {
         }
       `,
     })
-    expect(client.cache.extract()['$ROOT_QUERY.noId']).to.not.be.undefined
+    expect(client.cache.extract()).to.have.property('$ROOT_QUERY.noId')
     haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
     client.deleteCache('NoId')
-    expect(client.cache.extract()['$ROOT_QUERY.noId']).to.be.undefined
+    expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.noId',
     ])
@@ -491,6 +491,35 @@ describe('refetch when cache removed', () => {
         switch (callTime) {
           case 1:
             client.deleteCache('User')
+            break
+          case 2:
+            done()
+            break
+          default:
+            break
+        }
+      })
+  })
+
+  it('will refetch after cache without id is deleted', done => {
+    let callTime = 0
+    client
+      .watchQuery({
+        query: gql`
+          query {
+            noId {
+              # id
+              content
+            }
+          }
+        `,
+      })
+      .subscribe(result => {
+        callTime++
+        expect(result.data.noId.content).to.not.be.undefined
+        switch (callTime) {
+          case 1:
+            client.deleteCache('NoId')
             break
           case 2:
             done()
