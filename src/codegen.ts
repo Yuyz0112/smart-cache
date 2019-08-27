@@ -25,6 +25,19 @@ const getDependentTypes = (doc: DocumentNode, typeName: string) => {
         }
       }
     },
+    UnionTypeDefinition(unionNode) {
+      if (unionNode.types) {
+        for (const type of unionNode.types) {
+          visit(type, {
+            NamedType(namedTypeNode) {
+              if (namedTypeNode.name.value === typeName) {
+                dependentTypes.push(unionNode.name.value)
+              }
+            },
+          })
+        }
+      }
+    },
   })
   return dependentTypes
 }
@@ -74,6 +87,7 @@ export const typeFieldMap: TypeFieldMap = new Map<
 `
 }
 
+// get the most related fields, as for recursive related fields, it will be found in the recursive process of delete
 export const constructTypeFieldMap = (doc: DocumentNode) => {
   const relations: Relation[] = []
   visit(doc, {
@@ -91,6 +105,19 @@ export const constructTypeFieldMap = (doc: DocumentNode) => {
           dependentQueries,
         })
       }
+    },
+    UnionTypeDefinition(unionNode) {
+      const currentTypeName = unionNode.name.value
+      const dependentTypes = getDependentTypes(doc, currentTypeName)
+      const dependentQueries = getDependentQueries(
+        doc,
+        Array.from(dependentTypes)
+      )
+      relations.push({
+        typename: currentTypeName,
+        dependentTypes,
+        dependentQueries,
+      })
     },
   })
   return template(relations)

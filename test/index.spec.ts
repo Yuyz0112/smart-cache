@@ -9,6 +9,16 @@ import { InMemoryCache } from 'apollo-cache-inmemory'
 import { patch } from '../src/index'
 import { typeFieldMap } from './fixture/typeFieldMap'
 
+interface Post {
+  id: string
+  title: string
+}
+
+interface User {
+  id: string
+  posts: Post[]
+}
+
 const typeDefs = readFileSync(
   join(__dirname, './fixture/schema.graphql'),
   'utf8'
@@ -33,6 +43,13 @@ const fixture = {
     },
   ],
   noIds: [{ id: 'a', content: 'no id' }],
+  bookRelateds: [
+    { id: '1', title: 'Post 1' },
+    {
+      id: '1',
+      posts: [{ id: '2', title: 'Post 2' }],
+    },
+  ],
 }
 let db = JSON.parse(JSON.stringify(fixture)) as typeof fixture
 function restoreDB() {
@@ -43,6 +60,19 @@ const link = new SchemaLink({
   schema: makeExecutableSchema({
     typeDefs,
     resolvers: {
+      BookRelated: {
+        __resolveType(obj: User | Post) {
+          if ('posts' in obj && obj.posts) {
+            return 'User'
+          }
+
+          if ('title' in obj && obj.title) {
+            return 'Post'
+          }
+
+          return null
+        },
+      },
       Query: {
         getUser(parent, args) {
           return db.users.find(u => u.id === args.id)
@@ -68,6 +98,9 @@ const link = new SchemaLink({
         },
         emptyUsers() {
           return []
+        },
+        bookRelateds() {
+          return db.bookRelateds
         },
       },
       Mutation: {
@@ -346,8 +379,35 @@ describe('cache invalidation', () => {
     haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
     client.deleteCache('NoId')
     expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
+    notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
+  })
+
+  it('it will delete cache for union type', async () => {
+    await client.query({
+      query: gql`
+        query {
+          bookRelateds {
+            ... on User {
+              id
+            }
+            ... on Post {
+              id
+              title
+            }
+          }
+        }
+      `,
+    })
+    haveProps(client.cache.extract(), [
+      'ROOT_QUERY.bookRelateds',
+      'Post:1',
+      'User:1',
+    ])
+    client.deleteCache('BookRelated')
     notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.noId',
+      'ROOT_QUERY.bookRelateds',
+      'Post:1',
+      'User:1',
     ])
   })
 })
