@@ -22,6 +22,7 @@
     "Yanzhen Yu <yanzhen@smartx.com>"
   ],
   "license": "MIT",
+  "typings": "typings/index.d.ts",
   "files": [
     "dist",
     "es",
