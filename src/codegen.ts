@@ -86,7 +86,7 @@ export const mergeTypeFieldMap = (
   for (const relation of extraRelation) {
     const { typename, dependentTypes, dependentQueries } = relation
     const idx = baseTypeIndexMap.get(typename)
-    if (idx) {
+    if (idx !== undefined) { // warning 0 is false
       finalRelation[idx].dependentTypes.push(...dependentTypes)
       finalRelation[idx].dependentQueries.push(...dependentQueries)
     } else {
