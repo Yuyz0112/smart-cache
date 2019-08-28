@@ -74,7 +74,7 @@ export const typeFieldMap: TypeFieldMap = new Map<
 `
 }
 
-const addExtraRelation = (
+export const mergeTypeFieldMap = (
   baseRelation: Relation[],
   extraRelation: Relation[]
 ) => {
@@ -87,13 +87,13 @@ const addExtraRelation = (
     const { typename, dependentTypes, dependentQueries } = relation
     const idx = baseTypeIndexMap.get(typename)
     if (idx) {
-      finalRelation[idx].dependentTypes = finalRelation[idx].dependentTypes.concat(dependentTypes)
-      finalRelation[idx].dependentQueries = finalRelation[idx].dependentQueries.concat(dependentQueries)
+      finalRelation[idx].dependentTypes.push(...dependentTypes)
+      finalRelation[idx].dependentQueries.push(...dependentQueries)
     } else {
-      finalRelation = finalRelation.concat(relation)
+      finalRelation.push(relation)
     }
   }
-  return finalRelation
+  return template(finalRelation)
 }
 
 // get the most related fields, as for recursive related fields, it will be found in the recursive process of delete
@@ -120,7 +120,8 @@ export const constructTypeFieldMap = (
     },
   })
   if (extraRelation) {
-    relations = addExtraRelation(relations, extraRelation)
+    return mergeTypeFieldMap(relations, extraRelation)
+  } else {
+    return template(relations)
   }
-  return template(relations)
 }
