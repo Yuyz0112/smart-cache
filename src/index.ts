@@ -154,6 +154,8 @@ export function patch(
   ApolloClientClass: typeof ApolloClient,
   InMemoryCacheClass: typeof InMemoryCache
 ) {
+  InMemoryCache.prototype.typeFieldMap = new Map()
+  
   InMemoryCacheClass.prototype.setTypeFieldMap = function(v: TypeFieldMap) {
     this.typeFieldMap = v
   }

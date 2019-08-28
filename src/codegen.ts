@@ -74,8 +74,34 @@ export const typeFieldMap: TypeFieldMap = new Map<
 `
 }
 
-export const constructTypeFieldMap = (doc: DocumentNode) => {
-  const relations: Relation[] = []
+const addExtraRelation = (
+  baseRelation: Relation[],
+  extraRelation: Relation[]
+) => {
+  let finalRelation = [...baseRelation]
+  const baseTypeIndexMap: Map<string, number> = new Map()
+  baseRelation.forEach((v, idx) => {
+    baseTypeIndexMap.set(v.typename, idx)
+  })
+  for (const relation of extraRelation) {
+    const { typename, dependentTypes, dependentQueries } = relation
+    const idx = baseTypeIndexMap.get(typename)
+    if (idx) {
+      finalRelation[idx].dependentTypes = finalRelation[idx].dependentTypes.concat(dependentTypes)
+      finalRelation[idx].dependentQueries = finalRelation[idx].dependentQueries.concat(dependentQueries)
+    } else {
+      finalRelation = finalRelation.concat(relation)
+    }
+  }
+  return finalRelation
+}
+
+// get the most related fields, as for recursive related fields, it will be found in the recursive process of delete
+export const constructTypeFieldMap = (
+  doc: DocumentNode,
+  extraRelation?: Relation[]
+) => {
+  let relations: Relation[] = []
   visit(doc, {
     ObjectTypeDefinition(objectNode) {
       const currentTypeName = objectNode.name.value
@@ -93,5 +119,8 @@ export const constructTypeFieldMap = (doc: DocumentNode) => {
       }
     },
   })
+  if (extraRelation) {
+    relations = addExtraRelation(relations, extraRelation)
+  }
   return template(relations)
 }
