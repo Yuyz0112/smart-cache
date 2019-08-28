@@ -26,16 +26,24 @@ const getDependentTypes = (doc: DocumentNode, typeName: string) => {
       }
     },
     UnionTypeDefinition(unionNode) {
-      if (unionNode.types) {
-        for (const type of unionNode.types) {
-          visit(type, {
-            NamedType(namedTypeNode) {
-              if (namedTypeNode.name.value === typeName) {
-                dependentTypes.push(unionNode.name.value)
-              }
-            },
-          })
-        }
+      if (!unionNode.types) {
+        return
+      }
+      const childTypes = [unionNode.name.value]
+      let isRelated = false
+      for (const type of unionNode.types) {
+        visit(type, {
+          NamedType(namedTypeNode) {
+            const name = namedTypeNode.name.value
+            childTypes.push(name)
+            if (name === typeName) {
+              isRelated = true
+            }
+          },
+        })
+      }
+      if (isRelated) {
+        dependentTypes.push(...childTypes)
       }
     },
   })

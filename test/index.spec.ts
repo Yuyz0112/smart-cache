@@ -9,14 +9,14 @@ import { InMemoryCache } from 'apollo-cache-inmemory'
 import { patch } from '../src/index'
 import { typeFieldMap } from './fixture/typeFieldMap'
 
-interface Post {
+interface Fuzzy {
   id: string
-  title: string
+  posts: string
+  content: string
 }
 
-interface User {
-  id: string
-  posts: Post[]
+interface NoId {
+  content: string
 }
 
 const typeDefs = readFileSync(
@@ -42,13 +42,14 @@ const fixture = {
       content: 'Post:1',
     },
   ],
-  noIds: [{ id: 'a', content: 'no id' }],
+  noIds: [{ content: 'no id' }],
   bookRelateds: [
-    { id: '1', title: 'Post 1' },
     {
       id: '1',
-      posts: [{ id: '2', title: 'Post 2' }],
+      posts: 'fuzzy key',
+      content: 'Post:1',
     },
+    { content: 'no id' },
   ],
 }
 let db = JSON.parse(JSON.stringify(fixture)) as typeof fixture
@@ -61,16 +62,12 @@ const link = new SchemaLink({
     typeDefs,
     resolvers: {
       BookRelated: {
-        __resolveType(obj: User | Post) {
-          if ('posts' in obj && obj.posts) {
-            return 'User'
+        __resolveType(obj: Fuzzy | NoId) {
+          if ('id' in obj && obj.id) {
+            return 'Fuzzy'
+          } else {
+            return 'NoId'
           }
-
-          if ('title' in obj && obj.title) {
-            return 'Post'
-          }
-
-          return null
         },
       },
       Query: {
@@ -387,27 +384,28 @@ describe('cache invalidation', () => {
       query: gql`
         query {
           bookRelateds {
-            ... on User {
+            ... on Fuzzy {
               id
+              posts
+              content
             }
-            ... on Post {
-              id
-              title
+            ... on NoId {
+              content
             }
           }
         }
       `,
     })
+    expect(client.cache.extract()).to.have.property('ROOT_QUERY.bookRelateds.1')
     haveProps(client.cache.extract(), [
       'ROOT_QUERY.bookRelateds',
-      'Post:1',
-      'User:1',
+      'Fuzzy:1',
     ])
     client.deleteCache('BookRelated')
+    expect(client.cache.extract()).to.not.have.property('ROOT_QUERY.bookRelateds.1')
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.bookRelateds',
-      'Post:1',
-      'User:1',
+      'Fuzzy:1',
     ])
   })
 })
