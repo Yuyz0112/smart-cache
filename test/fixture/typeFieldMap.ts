@@ -26,8 +26,8 @@ export const typeFieldMap: TypeFieldMap = new Map<
     [
       "Fuzzy",
       {
-        dependentTypes: new Set(["Fuzzy","Nested"]),
-        dependentQueries: new Set(["fuzzy","nested"])
+        dependentTypes: new Set(["Fuzzy","Nested","BookRelated","Fuzzy","NoId"]),
+        dependentQueries: new Set(["fuzzy","nested","noId","bookRelateds"])
       }
     ],
     [
@@ -40,8 +40,15 @@ export const typeFieldMap: TypeFieldMap = new Map<
     [
       "NoId",
       {
-        dependentTypes: new Set(["NoId"]),
-        dependentQueries: new Set(["noId"])
+        dependentTypes: new Set(["NoId","BookRelated","Fuzzy","NoId"]),
+        dependentQueries: new Set(["fuzzy","noId","bookRelateds"])
+      }
+    ],
+    [
+      "BookRelated",
+      {
+        dependentTypes: new Set(["BookRelated"]),
+        dependentQueries: new Set(["bookRelateds"])
       }
     ]
 ]);

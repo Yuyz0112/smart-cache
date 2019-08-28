@@ -9,6 +9,16 @@ import { InMemoryCache } from 'apollo-cache-inmemory'
 import { patch } from '../src/index'
 import { typeFieldMap } from './fixture/typeFieldMap'
 
+interface Fuzzy {
+  id: string
+  posts: string
+  content: string
+}
+
+interface NoId {
+  content: string
+}
+
 const typeDefs = readFileSync(
   join(__dirname, './fixture/schema.graphql'),
   'utf8'
@@ -32,7 +42,15 @@ const fixture = {
       content: 'Post:1',
     },
   ],
-  noIds: [{ id: 'a', content: 'no id' }],
+  noIds: [{ content: 'no id' }],
+  bookRelateds: [
+    {
+      id: '1',
+      posts: 'fuzzy key',
+      content: 'Post:1',
+    },
+    { content: 'no id' },
+  ],
 }
 let db = JSON.parse(JSON.stringify(fixture)) as typeof fixture
 function restoreDB() {
@@ -43,6 +61,15 @@ const link = new SchemaLink({
   schema: makeExecutableSchema({
     typeDefs,
     resolvers: {
+      BookRelated: {
+        __resolveType(obj: Fuzzy | NoId) {
+          if ('id' in obj && obj.id) {
+            return 'Fuzzy'
+          } else {
+            return 'NoId'
+          }
+        },
+      },
       Query: {
         getUser(parent, args) {
           return db.users.find(u => u.id === args.id)
@@ -68,6 +95,9 @@ const link = new SchemaLink({
         },
         emptyUsers() {
           return []
+        },
+        bookRelateds() {
+          return db.bookRelateds
         },
       },
       Mutation: {
@@ -346,8 +376,36 @@ describe('cache invalidation', () => {
     haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
     client.deleteCache('NoId')
     expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
+    notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
+  })
+
+  it('it will delete cache for union type', async () => {
+    await client.query({
+      query: gql`
+        query {
+          bookRelateds {
+            ... on Fuzzy {
+              id
+              posts
+              content
+            }
+            ... on NoId {
+              content
+            }
+          }
+        }
+      `,
+    })
+    expect(client.cache.extract()).to.have.property('ROOT_QUERY.bookRelateds.1')
+    haveProps(client.cache.extract(), [
+      'ROOT_QUERY.bookRelateds',
+      'Fuzzy:1',
+    ])
+    client.deleteCache('BookRelated')
+    expect(client.cache.extract()).to.not.have.property('ROOT_QUERY.bookRelateds.1')
     notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.noId',
+      'ROOT_QUERY.bookRelateds',
+      'Fuzzy:1',
     ])
   })
 })
