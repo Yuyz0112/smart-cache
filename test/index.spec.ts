@@ -72,7 +72,7 @@ const link = new SchemaLink({
         },
         pureText() {
           return db.pureText
-        }
+        },
       },
       Mutation: {
         deletePost(parent, args) {
@@ -125,9 +125,12 @@ describe('cache invalidation', () => {
       'User:1',
       'Post:2',
     ])
-    client.deleteCache('User', {
-      __typename: 'User',
-      id: '1',
+    client.deleteCache({
+      typeName: 'User',
+      value: {
+        __typename: 'User',
+        id: '1',
+      },
     })
     haveProps(client.cache.extract(), ['Post:2'])
     notHaveProps(client.cache.extract(), [
@@ -155,7 +158,13 @@ describe('cache invalidation', () => {
       'User:1',
       'Post:2',
     ])
-    client.deleteCache('Post', { __typename: 'Post', id: '2' })
+    client.deleteCache({
+      typeName: 'Post',
+      value: {
+        __typename: 'Post',
+        id: '2',
+      },
+    })
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.getUser({"id":"1"})',
       'User:1',
@@ -190,7 +199,10 @@ describe('cache invalidation', () => {
       'Post:1',
       'Post:2',
     ])
-    client.deleteCache('Post', { __typename: 'Post', id: '2' })
+    client.deleteCache({
+      typeName: 'Post',
+      value: { __typename: 'Post', id: '2' },
+    })
     haveProps(client.cache.extract(), ['Post:1'])
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.getPosts({"page":1})',
@@ -241,7 +253,7 @@ describe('cache invalidation', () => {
       'Post:1',
       'Post:2',
     ])
-    client.deleteCache('Post')
+    client.deleteCache({ typeName: 'Post' })
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.getUser({"id":"1"})',
       'ROOT_QUERY.getPosts({"page":1})',
@@ -280,7 +292,7 @@ describe('cache invalidation', () => {
       'Fuzzy:1',
       'Post:1',
     ])
-    client.deleteCache('Post')
+    client.deleteCache({ typeName: 'Post' })
     haveProps(client.cache.extract(), ['ROOT_QUERY.fuzzy', 'Fuzzy:1'])
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.getPosts({"page":1})',
@@ -323,7 +335,7 @@ describe('cache invalidation', () => {
       'Post:2',
       'Fuzzy:1',
     ])
-    client.deleteCache('Post')
+    client.deleteCache({ typeName: 'Post' })
     haveProps(client.cache.extract(), ['Fuzzy:1'])
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.nested',
@@ -348,11 +360,11 @@ describe('cache invalidation', () => {
     })
     expect(client.cache.extract()).to.have.property('$ROOT_QUERY.noId')
     haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
-    client.deleteCache('NoId')
+    client.deleteCache({ typeName: 'NoId' })
     expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
     notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
   })
-  
+
   it('can delete query directly', async () => {
     await client.query({
       query: gql`
@@ -362,7 +374,7 @@ describe('cache invalidation', () => {
       `,
     })
     haveProps(client.cache.extract(), ['ROOT_QUERY.pureText'])
-    client.deleteCache(undefined, undefined, 'pureText')
+    client.deleteCache({ query: 'pureText' })
     expect(client.cache.extract()).to.not.have.property('ROOT_QUERY.pureText')
   })
 })
@@ -395,7 +407,10 @@ describe('refetch when cache removed', () => {
         expect(result.data.getUser.id).to.equal('1')
         switch (callTime) {
           case 1:
-            client.deleteCache('User', { __typename: 'User', id: '1' })
+            client.deleteCache({
+              typeName: 'User',
+              value: { __typename: 'User', id: '1' },
+            })
             break
           case 2:
             done()
@@ -426,7 +441,10 @@ describe('refetch when cache removed', () => {
       .subscribe(result => {
         callTime++
         expect(result.data.getUser.id).to.equal('1')
-        client.deleteCache('User', { __typename: 'User', id: '1' })
+        client.deleteCache({
+          typeName: 'User',
+          value: { __typename: 'User', id: '1' },
+        })
         setTimeout(() => {
           expect(callTime).to.equal(1)
           done()
@@ -455,7 +473,10 @@ describe('refetch when cache removed', () => {
         expect(result.data.getUser.id).to.equal('1')
         if (callTime === 1) {
           handler.unsubscribe()
-          client.deleteCache('User', { __typename: 'User', id: '1' })
+          client.deleteCache({
+            typeName: 'User',
+            value: { __typename: 'User', id: '1' },
+          })
           setTimeout(() => {
             expect(callTime).to.equal(1)
             done()
@@ -480,7 +501,10 @@ describe('refetch when cache removed', () => {
       .subscribe(result => {
         callTime++
         expect(result.data.getPosts.length).to.equal(1)
-        client.deleteCache('User', { __typename: 'User', id: '1' })
+        client.deleteCache({
+          typeName: 'User',
+          value: { __typename: 'User', id: '1' },
+        })
         setTimeout(() => {
           expect(callTime).to.equal(1)
           done()
@@ -505,7 +529,7 @@ describe('refetch when cache removed', () => {
         expect(result.data.emptyUsers).to.deep.equal([])
         switch (callTime) {
           case 1:
-            client.deleteCache('User')
+            client.deleteCache({ typeName: 'User' })
             break
           case 2:
             done()
@@ -534,7 +558,7 @@ describe('refetch when cache removed', () => {
         expect(result.data.noId.content).to.not.be.undefined
         switch (callTime) {
           case 1:
-            client.deleteCache('NoId')
+            client.deleteCache({ typeName: 'NoId' })
             break
           case 2:
             done()
@@ -560,7 +584,7 @@ describe('refetch when cache removed', () => {
         expect(result.data.pureText).to.not.be.undefined
         switch (callTime) {
           case 1:
-            client.deleteCache(undefined, undefined, 'pureText')
+            client.deleteCache({ query: 'pureText' })
             break
           case 2:
             done()
@@ -568,6 +592,33 @@ describe('refetch when cache removed', () => {
           default:
             break
         }
+      })
+  })
+
+  it('will not refetch after query is deleted directly', done => {
+    let callTime = 0
+    client
+      .watchQuery({
+        query: gql`
+          query {
+            pureText
+          }
+        `,
+      })
+      .subscribe(result => {
+        callTime++
+        switch (callTime) {
+          case 1:
+            expect(result.data.pureText).to.not.be.undefined
+            client.deleteCache({ query: 'pureText' }, { refetch: false })
+            break
+          default:
+            break
+        }
+        setTimeout(() => {
+          expect(callTime).to.equal(1)
+          done()
+        }, 0)
       })
   })
 })
