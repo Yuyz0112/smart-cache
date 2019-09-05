@@ -25,7 +25,7 @@ type IdGetterObj = any
 
 declare module 'apollo-cache-inmemory' {
   interface InMemoryCache {
-    delete(typeName: string, value?: IdGetterObj): void
+    delete(typeName?: string, value?: IdGetterObj, query?: string): void
     typeFieldMap: TypeFieldMap
     setTypeFieldMap: (v: TypeFieldMap) => void
   }
@@ -33,7 +33,7 @@ declare module 'apollo-cache-inmemory' {
 
 declare module 'apollo-client' {
   interface ApolloClient<TCacheShape> {
-    deleteCache(typeName: string, value?: IdGetterObj): void
+    deleteCache(typeName?: string, value?: IdGetterObj, query?: string): void
   }
 }
 
@@ -155,15 +155,16 @@ export function patch(
   InMemoryCacheClass: typeof InMemoryCache
 ) {
   InMemoryCache.prototype.typeFieldMap = new Map()
-  
+
   InMemoryCacheClass.prototype.setTypeFieldMap = function(v: TypeFieldMap) {
     this.typeFieldMap = v
   }
 
   InMemoryCache.prototype.delete = function(
     this: InMemoryCache,
-    typeName: string,
-    value?: IdGetterObj
+    typeName?: string,
+    value?: IdGetterObj,
+    query?: string
   ) {
     const store: DepTrackingCache = this['data']
     const cacheData: NormalizedCacheObject = store['data']
@@ -173,13 +174,24 @@ export function patch(
     const originKeyToBeDeleted = value && dataIdFromObjectFn(value)
     let deletedTopKeys = []
 
+    const deleteQueryInRoot = (queryInRoot: string) => {
+      const storeObject = store.get('ROOT_QUERY')
+      const queryResult = storeObject[queryInRoot]
+      if (isIdValueArray(queryResult)) {
+        queryResult.forEach(e => store.delete(e.id))
+      } else if (isIdValue(queryResult)) {
+        store.delete(queryResult.id)
+      }
+      store.set('ROOT_QUERY', omit(storeObject, queryInRoot))
+    }
+
     if (
       originKeyToBeDeleted &&
       Object.keys(cacheData).includes(originKeyToBeDeleted)
     ) {
       store.delete(originKeyToBeDeleted)
       deletedTopKeys.push(originKeyToBeDeleted)
-    } else {
+    } else if (typeName) {
       const filedsForDelete = this.typeFieldMap.get(typeName)
       if (!filedsForDelete) {
         throw new Error('Error: No Such Type')
@@ -187,14 +199,7 @@ export function patch(
       for (const query of Object.keys(cacheData['ROOT_QUERY']!)) {
         const currentQuery = query.split('(')[0]
         if (filedsForDelete.dependentQueries.has(currentQuery)) {
-          const storeObject = store.get('ROOT_QUERY')
-          const queryResult = storeObject[query]
-          if (isIdValueArray(queryResult)) {
-            queryResult.forEach(e => store.delete(e.id))
-          } else if (isIdValue(queryResult)) {
-            store.delete(queryResult.id)
-          }
-          store.set('ROOT_QUERY', omit(storeObject, query))
+          deleteQueryInRoot(query)
         }
       }
       for (const topKey of Object.keys(cacheData)) {
@@ -206,14 +211,30 @@ export function patch(
       }
     }
 
+    if (query) {
+      for (const queryInRoot of Object.keys(cacheData['ROOT_QUERY']!)) {
+        const currentQuery = queryInRoot.split('(')[0]
+        if (query === currentQuery) {
+          deleteQueryInRoot(query)
+        }
+      }
+    }
+
     basicInvalidateCache(store, cacheData, deletedTopKeys)
   }
 
+  // compared to cache.delete above, this, client.delete,  will refetch deleted active cache
   ApolloClientClass.prototype.deleteCache = function(
-    typeName: string,
-    value?: IdGetterObj
+    typeName?: string,
+    value?: IdGetterObj,
+    query?: string
   ) {
-    ;(this.cache as InMemoryCache).delete.call(this.cache, typeName, value)
+    ;(this.cache as InMemoryCache).delete.call(
+      this.cache,
+      typeName,
+      value,
+      query
+    )
     const queries: Map<string, QueryInfo> = this.queryManager['queries']
 
     // Step 1
