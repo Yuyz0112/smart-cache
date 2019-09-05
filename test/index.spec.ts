@@ -33,6 +33,7 @@ const fixture = {
     },
   ],
   noIds: [{ id: 'a', content: 'no id' }],
+  pureText: 'abc',
 }
 let db = JSON.parse(JSON.stringify(fixture)) as typeof fixture
 function restoreDB() {
@@ -69,6 +70,9 @@ const link = new SchemaLink({
         emptyUsers() {
           return []
         },
+        pureText() {
+          return db.pureText
+        }
       },
       Mutation: {
         deletePost(parent, args) {
@@ -346,9 +350,20 @@ describe('cache invalidation', () => {
     haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
     client.deleteCache('NoId')
     expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.noId',
-    ])
+    notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
+  })
+  
+  it('can delete query directly', async () => {
+    await client.query({
+      query: gql`
+        query {
+          pureText
+        }
+      `,
+    })
+    haveProps(client.cache.extract(), ['ROOT_QUERY.pureText'])
+    client.deleteCache(undefined, undefined, 'pureText')
+    expect(client.cache.extract()).to.not.have.property('ROOT_QUERY.pureText')
   })
 })
 
@@ -520,6 +535,32 @@ describe('refetch when cache removed', () => {
         switch (callTime) {
           case 1:
             client.deleteCache('NoId')
+            break
+          case 2:
+            done()
+            break
+          default:
+            break
+        }
+      })
+  })
+
+  it('will refetch after query is deleted directly', done => {
+    let callTime = 0
+    client
+      .watchQuery({
+        query: gql`
+          query {
+            pureText
+          }
+        `,
+      })
+      .subscribe(result => {
+        callTime++
+        expect(result.data.pureText).to.not.be.undefined
+        switch (callTime) {
+          case 1:
+            client.deleteCache(undefined, undefined, 'pureText')
             break
           case 2:
             done()

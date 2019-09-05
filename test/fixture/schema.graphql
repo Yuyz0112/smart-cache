@@ -5,6 +5,7 @@ type Query {
   nested: Nested!
   noId: NoId
   emptyUsers: [User!]!
+  pureText: String
 }
 
 type Mutation {
