@@ -9,6 +9,16 @@ import { ApolloClient, OperationVariables } from 'apollo-client'
 import { DocumentNode } from 'graphql'
 import { QueryInfo } from 'apollo-client/core/QueryManager'
 
+interface CacheSelector {
+  typeName?: string
+  value?: IdGetterObj
+  query?: string
+}
+
+interface CacheDeleteOptions {
+  refetch?: boolean
+}
+
 export type TypeFieldMap = Map<
   string,
   { dependentTypes: Set<string>; dependentQueries: Set<string> }
@@ -33,7 +43,10 @@ declare module 'apollo-cache-inmemory' {
 
 declare module 'apollo-client' {
   interface ApolloClient<TCacheShape> {
-    deleteCache(typeName?: string, value?: IdGetterObj, query?: string): void
+    deleteCache(
+      cacheSelector: CacheSelector,
+      options?: CacheDeleteOptions
+    ): void
   }
 }
 
@@ -225,16 +238,21 @@ export function patch(
 
   // compared to cache.delete above, this, client.delete,  will refetch deleted active cache
   ApolloClientClass.prototype.deleteCache = function(
-    typeName?: string,
-    value?: IdGetterObj,
-    query?: string
+    cacheSelector: CacheSelector,
+    options?: CacheDeleteOptions
   ) {
+    const { typeName, value, query } = cacheSelector
     ;(this.cache as InMemoryCache).delete.call(
       this.cache,
       typeName,
       value,
       query
     )
+
+    if (options && !options.refetch) {
+      return
+    }
+    
     const queries: Map<string, QueryInfo> = this.queryManager['queries']
 
     // Step 1
