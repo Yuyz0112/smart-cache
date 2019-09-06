@@ -249,7 +249,7 @@ export function patch(
       query
     )
 
-    if (options && !options.refetch) {
+    if (options && options.refetch === false) {
       return
     }
     
