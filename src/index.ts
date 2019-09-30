@@ -10,7 +10,7 @@ import { DocumentNode } from 'graphql'
 import { QueryInfo } from 'apollo-client/core/QueryManager'
 
 interface CacheSelector {
-  typeName?: string
+  typename?: string
   value?: IdGetterObj
   query?: string
 }
@@ -35,7 +35,7 @@ type IdGetterObj = any
 
 declare module 'apollo-cache-inmemory' {
   interface InMemoryCache {
-    delete(typeName?: string, value?: IdGetterObj, query?: string): void
+    delete(typename?: string, value?: IdGetterObj, query?: string): void
     typeFieldMap: TypeFieldMap
     setTypeFieldMap: (v: TypeFieldMap) => void
   }
@@ -175,7 +175,7 @@ export function patch(
 
   InMemoryCache.prototype.delete = function(
     this: InMemoryCache,
-    typeName?: string,
+    typename?: string,
     value?: IdGetterObj,
     query?: string
   ) {
@@ -204,8 +204,8 @@ export function patch(
     ) {
       store.delete(originKeyToBeDeleted)
       deletedTopKeys.push(originKeyToBeDeleted)
-    } else if (typeName) {
-      const filedsForDelete = this.typeFieldMap.get(typeName)
+    } else if (typename) {
+      const filedsForDelete = this.typeFieldMap.get(typename)
       if (!filedsForDelete) {
         throw new Error('Error: No Such Type')
       }
@@ -241,10 +241,10 @@ export function patch(
     cacheSelector: CacheSelector,
     options?: CacheDeleteOptions
   ) {
-    const { typeName, value, query } = cacheSelector
+    const { typename, value, query } = cacheSelector
     ;(this.cache as InMemoryCache).delete.call(
       this.cache,
-      typeName,
+      typename,
       value,
       query
     )
@@ -252,7 +252,7 @@ export function patch(
     if (options && options.refetch === false) {
       return
     }
-    
+
     const queries: Map<string, QueryInfo> = this.queryManager['queries']
 
     // Step 1

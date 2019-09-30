@@ -126,7 +126,7 @@ describe('cache invalidation', () => {
       'Post:2',
     ])
     client.deleteCache({
-      typeName: 'User',
+      typename: 'User',
       value: {
         __typename: 'User',
         id: '1',
@@ -159,7 +159,7 @@ describe('cache invalidation', () => {
       'Post:2',
     ])
     client.deleteCache({
-      typeName: 'Post',
+      typename: 'Post',
       value: {
         __typename: 'Post',
         id: '2',
@@ -200,7 +200,7 @@ describe('cache invalidation', () => {
       'Post:2',
     ])
     client.deleteCache({
-      typeName: 'Post',
+      typename: 'Post',
       value: { __typename: 'Post', id: '2' },
     })
     haveProps(client.cache.extract(), ['Post:1'])
@@ -253,7 +253,7 @@ describe('cache invalidation', () => {
       'Post:1',
       'Post:2',
     ])
-    client.deleteCache({ typeName: 'Post' })
+    client.deleteCache({ typename: 'Post' })
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.getUser({"id":"1"})',
       'ROOT_QUERY.getPosts({"page":1})',
@@ -292,7 +292,7 @@ describe('cache invalidation', () => {
       'Fuzzy:1',
       'Post:1',
     ])
-    client.deleteCache({ typeName: 'Post' })
+    client.deleteCache({ typename: 'Post' })
     haveProps(client.cache.extract(), ['ROOT_QUERY.fuzzy', 'Fuzzy:1'])
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.getPosts({"page":1})',
@@ -335,7 +335,7 @@ describe('cache invalidation', () => {
       'Post:2',
       'Fuzzy:1',
     ])
-    client.deleteCache({ typeName: 'Post' })
+    client.deleteCache({ typename: 'Post' })
     haveProps(client.cache.extract(), ['Fuzzy:1'])
     notHaveProps(client.cache.extract(), [
       'ROOT_QUERY.nested',
@@ -360,7 +360,7 @@ describe('cache invalidation', () => {
     })
     expect(client.cache.extract()).to.have.property('$ROOT_QUERY.noId')
     haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
-    client.deleteCache({ typeName: 'NoId' })
+    client.deleteCache({ typename: 'NoId' })
     expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
     notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
   })
@@ -408,7 +408,7 @@ describe('refetch when cache removed', () => {
         switch (callTime) {
           case 1:
             client.deleteCache({
-              typeName: 'User',
+              typename: 'User',
               value: { __typename: 'User', id: '1' },
             })
             break
@@ -442,7 +442,7 @@ describe('refetch when cache removed', () => {
         callTime++
         expect(result.data.getUser.id).to.equal('1')
         client.deleteCache({
-          typeName: 'User',
+          typename: 'User',
           value: { __typename: 'User', id: '1' },
         })
         setTimeout(() => {
@@ -474,7 +474,7 @@ describe('refetch when cache removed', () => {
         if (callTime === 1) {
           handler.unsubscribe()
           client.deleteCache({
-            typeName: 'User',
+            typename: 'User',
             value: { __typename: 'User', id: '1' },
           })
           setTimeout(() => {
@@ -502,7 +502,7 @@ describe('refetch when cache removed', () => {
         callTime++
         expect(result.data.getPosts.length).to.equal(1)
         client.deleteCache({
-          typeName: 'User',
+          typename: 'User',
           value: { __typename: 'User', id: '1' },
         })
         setTimeout(() => {
@@ -529,7 +529,7 @@ describe('refetch when cache removed', () => {
         expect(result.data.emptyUsers).to.deep.equal([])
         switch (callTime) {
           case 1:
-            client.deleteCache({ typeName: 'User' })
+            client.deleteCache({ typename: 'User' })
             break
           case 2:
             done()
@@ -558,7 +558,7 @@ describe('refetch when cache removed', () => {
         expect(result.data.noId.content).to.not.be.undefined
         switch (callTime) {
           case 1:
-            client.deleteCache({ typeName: 'NoId' })
+            client.deleteCache({ typename: 'NoId' })
             break
           case 2:
             done()

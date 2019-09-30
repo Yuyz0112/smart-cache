@@ -6,8 +6,8 @@ export interface Relation {
   dependentQueries: string[]
 }
 
-const getDependentTypes = (doc: DocumentNode, typeName: string) => {
-  const dependentTypes: string[] = [typeName]
+const getDependentTypes = (doc: DocumentNode, typename: string) => {
+  const dependentTypes: string[] = [typename]
   visit(doc, {
     ObjectTypeDefinition(objectNode) {
       if (
@@ -17,7 +17,7 @@ const getDependentTypes = (doc: DocumentNode, typeName: string) => {
         for (const field of objectNode.fields) {
           visit(field, {
             NamedType(namedTypeNode) {
-              if (namedTypeNode.name.value === typeName) {
+              if (namedTypeNode.name.value === typename) {
                 dependentTypes.push(objectNode.name.value)
               }
             },
@@ -29,7 +29,7 @@ const getDependentTypes = (doc: DocumentNode, typeName: string) => {
   return dependentTypes
 }
 
-const getDependentQueries = (doc: DocumentNode, typeName: string[]) => {
+const getDependentQueries = (doc: DocumentNode, typename: string[]) => {
   const dependentQueries: string[] = []
   visit(doc, {
     ObjectTypeDefinition(objectNode) {
@@ -37,7 +37,7 @@ const getDependentQueries = (doc: DocumentNode, typeName: string[]) => {
         for (const field of objectNode.fields) {
           visit(field, {
             NamedType(namedTypeNode) {
-              if (typeName.includes(namedTypeNode.name.value)) {
+              if (typename.includes(namedTypeNode.name.value)) {
                 dependentQueries.push(field.name.value)
               }
             },
@@ -86,7 +86,8 @@ export const mergeTypeFieldMap = (
   for (const relation of extraRelation) {
     const { typename, dependentTypes, dependentQueries } = relation
     const idx = baseTypeIndexMap.get(typename)
-    if (idx !== undefined) { // warning 0 is false
+    if (idx !== undefined) {
+      // warning 0 is false
       finalRelation[idx].dependentTypes.push(...dependentTypes)
       finalRelation[idx].dependentQueries.push(...dependentQueries)
     } else {
