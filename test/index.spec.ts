@@ -14,7 +14,10 @@ const typeDefs = readFileSync(
   'utf8'
 )
 const fixture = {
-  posts: [{ id: '1', title: 'Post 1' }, { id: '2', title: 'Post 2' }],
+  posts: [
+    { id: '1', title: 'Post 1' },
+    { id: '2', title: 'Post 2' },
+  ],
   users: [
     {
       id: '1',
@@ -106,276 +109,366 @@ describe('cache invalidation', () => {
     client.cache.reset()
   })
 
-  it('can delete an entity and corresponding queries', async () => {
-    await client.query({
-      query: gql`
-        query {
-          getUser(id: "1") {
-            id
-            posts {
-              id
-              title
-            }
-          }
-        }
-      `,
-    })
-    haveProps(client.cache.extract(), [
-      'ROOT_QUERY.getUser({"id":"1"})',
-      'User:1',
-      'Post:2',
-    ])
-    client.deleteCache({
-      typename: 'User',
-      value: {
-        __typename: 'User',
-        id: '1',
-      },
-    })
-    haveProps(client.cache.extract(), ['Post:2'])
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.getUser({"id":"1"})',
-      'User:1',
-    ])
-  })
-
-  it('can delete an deep dependent entity and corresponding queries', async () => {
-    await client.query({
-      query: gql`
-        query {
-          getUser(id: "1") {
-            id
-            posts {
-              id
-              title
-            }
-          }
-        }
-      `,
-    })
-    haveProps(client.cache.extract(), [
-      'ROOT_QUERY.getUser({"id":"1"})',
-      'User:1',
-      'Post:2',
-    ])
-    client.deleteCache({
-      typename: 'Post',
-      value: {
-        __typename: 'Post',
-        id: '2',
-      },
-    })
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.getUser({"id":"1"})',
-      'User:1',
-      'Post:2',
-    ])
-  })
-
-  it('can delete pagination data when any dependent entity was removed', async () => {
-    await client.query({
-      query: gql`
-        query {
-          getPosts(page: 1) {
-            id
-            title
-          }
-        }
-      `,
-    })
-    await client.query({
-      query: gql`
-        query {
-          getPosts(page: 2) {
-            id
-            title
-          }
-        }
-      `,
-    })
-    haveProps(client.cache.extract(), [
-      'ROOT_QUERY.getPosts({"page":1})',
-      'ROOT_QUERY.getPosts({"page":2})',
-      'Post:1',
-      'Post:2',
-    ])
-    client.deleteCache({
-      typename: 'Post',
-      value: { __typename: 'Post', id: '2' },
-    })
-    haveProps(client.cache.extract(), ['Post:1'])
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.getPosts({"page":1})',
-      'ROOT_QUERY.getPosts({"page":2})',
-      'Post:2',
-    ])
-  })
-
-  it('can delete a type of entities and there corresponding queries', async () => {
-    await client.query({
-      query: gql`
-        query {
-          getUser(id: "1") {
-            id
-            posts {
-              id
-              title
-            }
-          }
-        }
-      `,
-    })
-    await client.query({
-      query: gql`
-        query {
-          getPosts(page: 1) {
-            id
-            title
-          }
-        }
-      `,
-    })
-    await client.query({
-      query: gql`
-        query {
-          getPosts(page: 2) {
-            id
-            title
-          }
-        }
-      `,
-    })
-    haveProps(client.cache.extract(), [
-      'ROOT_QUERY.getUser({"id":"1"})',
-      'ROOT_QUERY.getPosts({"page":1})',
-      'ROOT_QUERY.getPosts({"page":2})',
-      'User:1',
-      'Post:1',
-      'Post:2',
-    ])
-    client.deleteCache({ typename: 'Post' })
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.getUser({"id":"1"})',
-      'ROOT_QUERY.getPosts({"page":1})',
-      'ROOT_QUERY.getPosts({"page":2})',
-      'User:1',
-      'Post:1',
-      'Post:2',
-    ])
-  })
-
-  it('should not match field value', async () => {
-    await client.query({
-      query: gql`
-        query {
-          fuzzy {
-            id
-            posts
-            content
-          }
-        }
-      `,
-    })
-    await client.query({
-      query: gql`
-        query {
-          getPosts(page: 1) {
-            id
-            title
-          }
-        }
-      `,
-    })
-    haveProps(client.cache.extract(), [
-      'ROOT_QUERY.fuzzy',
-      'ROOT_QUERY.getPosts({"page":1})',
-      'Fuzzy:1',
-      'Post:1',
-    ])
-    client.deleteCache({ typename: 'Post' })
-    haveProps(client.cache.extract(), ['ROOT_QUERY.fuzzy', 'Fuzzy:1'])
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.getPosts({"page":1})',
-      'Post:1',
-    ])
-  })
-
-  it('handle nested value', async () => {
-    await client.query({
-      query: gql`
-        query {
-          nested {
-            id
-            users {
+  it('can delete an entity and corresponding queries', done => {
+    client
+      .query({
+        query: gql`
+          query {
+            getUser(id: "1") {
               id
               posts {
                 id
                 title
               }
             }
-            posts {
+          }
+        `,
+      })
+      .then(() => {
+        haveProps(client.cache.extract(), [
+          'ROOT_QUERY.getUser({"id":"1"})',
+          'User:1',
+          'Post:2',
+        ])
+        client.deleteCache(
+          {
+            typename: 'User',
+            value: {
+              __typename: 'User',
+              id: '1',
+            },
+          },
+          {
+            callback: () => {
+              haveProps(client.cache.extract(), ['Post:2'])
+              notHaveProps(client.cache.extract(), [
+                'ROOT_QUERY.getUser({"id":"1"})',
+                'User:1',
+              ])
+              done()
+            },
+          }
+        )
+      })
+  })
+
+  it('can delete an deep dependent entity and corresponding queries', done => {
+    client
+      .query({
+        query: gql`
+          query {
+            getUser(id: "1") {
+              id
+              posts {
+                id
+                title
+              }
+            }
+          }
+        `,
+      })
+      .then(() => {
+        haveProps(client.cache.extract(), [
+          'ROOT_QUERY.getUser({"id":"1"})',
+          'User:1',
+          'Post:2',
+        ])
+        client.deleteCache(
+          {
+            typename: 'Post',
+            value: {
+              __typename: 'Post',
+              id: '2',
+            },
+          },
+          {
+            callback: () => {
+              notHaveProps(client.cache.extract(), [
+                'ROOT_QUERY.getUser({"id":"1"})',
+                'User:1',
+                'Post:2',
+              ])
+              done()
+            },
+          }
+        )
+      })
+  })
+
+  it('can delete pagination data when any dependent entity was removed', done => {
+    client
+      .query({
+        query: gql`
+          query {
+            getPosts(page: 1) {
               id
               title
             }
+          }
+        `,
+      })
+      .then(() =>
+        client.query({
+          query: gql`
+            query {
+              getPosts(page: 2) {
+                id
+                title
+              }
+            }
+          `,
+        })
+      )
+      .then(() => {
+        haveProps(client.cache.extract(), [
+          'ROOT_QUERY.getPosts({"page":1})',
+          'ROOT_QUERY.getPosts({"page":2})',
+          'Post:1',
+          'Post:2',
+        ])
+        client.deleteCache(
+          {
+            typename: 'Post',
+            value: { __typename: 'Post', id: '2' },
+          },
+          {
+            callback: () => {
+              haveProps(client.cache.extract(), ['Post:1'])
+              notHaveProps(client.cache.extract(), [
+                'ROOT_QUERY.getPosts({"page":1})',
+                'ROOT_QUERY.getPosts({"page":2})',
+                'Post:2',
+              ])
+              done()
+            },
+          }
+        )
+      })
+  })
+
+  it('can delete a type of entities and there corresponding queries', done => {
+    client
+      .query({
+        query: gql`
+          query {
+            getUser(id: "1") {
+              id
+              posts {
+                id
+                title
+              }
+            }
+          }
+        `,
+      })
+      .then(() => {
+        client.query({
+          query: gql`
+            query {
+              getPosts(page: 1) {
+                id
+                title
+              }
+            }
+          `,
+        })
+      })
+      .then(() => {
+        client.query({
+          query: gql`
+            query {
+              getPosts(page: 2) {
+                id
+                title
+              }
+            }
+          `,
+        })
+      })
+      .then(() => {
+        haveProps(client.cache.extract(), [
+          'ROOT_QUERY.getUser({"id":"1"})',
+          'ROOT_QUERY.getPosts({"page":1})',
+          'ROOT_QUERY.getPosts({"page":2})',
+          'User:1',
+          'Post:1',
+          'Post:2',
+        ])
+        client.deleteCache(
+          { typename: 'Post' },
+          {
+            callback: () => {
+              notHaveProps(client.cache.extract(), [
+                'ROOT_QUERY.getUser({"id":"1"})',
+                'ROOT_QUERY.getPosts({"page":1})',
+                'ROOT_QUERY.getPosts({"page":2})',
+                'User:1',
+                'Post:1',
+                'Post:2',
+              ])
+              done()
+            },
+          }
+        )
+      })
+  })
+
+  it('should not match field value', done => {
+    client
+      .query({
+        query: gql`
+          query {
             fuzzy {
               id
               posts
               content
             }
           }
-        }
-      `,
-    })
-    haveProps(client.cache.extract(), [
-      'ROOT_QUERY.nested',
-      'Nested:1',
-      'User:1',
-      'User:2',
-      'Post:1',
-      'Post:2',
-      'Fuzzy:1',
-    ])
-    client.deleteCache({ typename: 'Post' })
-    haveProps(client.cache.extract(), ['Fuzzy:1'])
-    notHaveProps(client.cache.extract(), [
-      'ROOT_QUERY.nested',
-      'Nested:1',
-      'User:1',
-      'User:2',
-      'Post:1',
-      'Post:2',
-    ])
-  })
-
-  it('can delete entity without id', async () => {
-    await client.query({
-      query: gql`
-        query {
-          noId {
-            # id
-            content
+        `,
+      })
+      .then(() => {
+        client.query({
+          query: gql`
+            query {
+              getPosts(page: 1) {
+                id
+                title
+              }
+            }
+          `,
+        })
+      })
+      .then(() => {
+        haveProps(client.cache.extract(), [
+          'ROOT_QUERY.fuzzy',
+          'ROOT_QUERY.getPosts({"page":1})',
+          'Fuzzy:1',
+          'Post:1',
+        ])
+        client.deleteCache(
+          { typename: 'Post' },
+          {
+            callback: () => {
+              haveProps(client.cache.extract(), ['ROOT_QUERY.fuzzy', 'Fuzzy:1'])
+              notHaveProps(client.cache.extract(), [
+                'ROOT_QUERY.getPosts({"page":1})',
+                'Post:1',
+              ])
+              done()
+            },
           }
-        }
-      `,
-    })
-    expect(client.cache.extract()).to.have.property('$ROOT_QUERY.noId')
-    haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
-    client.deleteCache({ typename: 'NoId' })
-    expect(client.cache.extract()).to.not.have.property('$ROOT_QUERY.noId')
-    notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
+        )
+      })
   })
 
-  it('can delete query directly', async () => {
-    await client.query({
+  it('handle nested value', done => {
+    client
+      .query({
+        query: gql`
+          query {
+            nested {
+              id
+              users {
+                id
+                posts {
+                  id
+                  title
+                }
+              }
+              posts {
+                id
+                title
+              }
+              fuzzy {
+                id
+                posts
+                content
+              }
+            }
+          }
+        `,
+      })
+      .then(() => {
+        haveProps(client.cache.extract(), [
+          'ROOT_QUERY.nested',
+          'Nested:1',
+          'User:1',
+          'User:2',
+          'Post:1',
+          'Post:2',
+          'Fuzzy:1',
+        ])
+        client.deleteCache(
+          { typename: 'Post' },
+          {
+            callback: () => {
+              haveProps(client.cache.extract(), ['Fuzzy:1'])
+              notHaveProps(client.cache.extract(), [
+                'ROOT_QUERY.nested',
+                'Nested:1',
+                'User:1',
+                'User:2',
+                'Post:1',
+                'Post:2',
+              ])
+              done()
+            },
+          }
+        )
+      })
+  })
+
+  it('can delete entity without id', done => {
+    client
+      .query({
+        query: gql`
+          query {
+            noId {
+              # id
+              content
+            }
+          }
+        `,
+      })
+      .then(() => {
+        expect(client.cache.extract()).to.have.property('$ROOT_QUERY.noId')
+        haveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
+        client.deleteCache(
+          { typename: 'NoId' },
+          {
+            callback: () => {
+              expect(client.cache.extract()).to.not.have.property(
+                '$ROOT_QUERY.noId'
+              )
+              notHaveProps(client.cache.extract(), ['ROOT_QUERY.noId'])
+              done()
+            },
+          }
+        )
+      })
+  })
+
+  it('can delete query directly',  done => {
+     client.query({
       query: gql`
         query {
           pureText
         }
       `,
+    }).then(() => {
+      haveProps(client.cache.extract(), ['ROOT_QUERY.pureText'])
+      client.deleteCache(
+        { query: 'pureText' },
+        {
+          callback: () => {
+            expect(client.cache.extract()).to.not.have.property(
+              'ROOT_QUERY.pureText'
+            )
+            done()
+          },
+        }
+      )
     })
-    haveProps(client.cache.extract(), ['ROOT_QUERY.pureText'])
-    client.deleteCache({ query: 'pureText' })
-    expect(client.cache.extract()).to.not.have.property('ROOT_QUERY.pureText')
   })
 })
 
