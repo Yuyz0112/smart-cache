@@ -39,6 +39,8 @@
     "@types/chai": "^4.1.7",
     "@types/graphql": "^14.2.3",
     "@types/mocha": "^5.2.7",
+    "@types/node": "^12.0.0",
+    "@types/double-ended-queue": "^2.1.7",
     "@typescript-eslint/eslint-plugin": "^1.11.0",
     "@typescript-eslint/parser": "^1.11.0",
     "apollo-cache-inmemory": "^1.6.3",
@@ -59,5 +61,8 @@
     "rollup-plugin-typescript2": "^0.21.2",
     "ts-node": "^8.3.0",
     "typescript": "^3.5.3"
+  },
+  "dependencies": {
+    "double-ended-queue": "^2.1.0-0"
   }
 }

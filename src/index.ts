@@ -8,6 +8,7 @@ import { DepTrackingCache } from 'apollo-cache-inmemory/lib/depTrackingCache'
 import { ApolloClient, OperationVariables } from 'apollo-client'
 import { DocumentNode } from 'graphql'
 import { QueryInfo } from 'apollo-client/core/QueryManager'
+import * as Deque from 'double-ended-queue'
 
 interface CacheSelector {
   typename?: string
@@ -68,16 +69,39 @@ const isIdValueArray = (value: StoreValue): value is IdValue[] => {
   return isIdValue(value[0]) // union value can only include Object types, so no need to check every item in arrary
 }
 
+// if dependentTypes exist, sort keys in dependentTypes before
+function sort(keys: string[], dependentTypes?: Set<string>) {
+  if (!dependentTypes) return keys.sort()
+
+  const inDependentTypes = (key: string) => {
+    const type = key.split(':')[0]
+    return dependentTypes.has(type)
+  }
+
+  return keys.sort((a, b) => {
+    const _a = inDependentTypes(a)
+    const _b = inDependentTypes(b)
+
+    if (_a && !_b) {
+      return -1
+    } else if (!_a && _b) {
+      return 1
+    } else {
+      return a.localeCompare(b)
+    }
+  })
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function omit(obj: any, remove: string[] | string) {
   const result: any = {}
-  if (typeof remove === 'string') {
-    remove = [].slice.call(arguments, 1)
-  }
+  const removeSet = new Set(
+    Array.isArray(remove) ? remove : [].slice.call(arguments, 1)
+  )
 
   for (const prop in obj) {
     if (!obj.hasOwnProperty || obj.hasOwnProperty(prop)) {
-      if (remove.indexOf(prop) === -1) {
+      if (!removeSet.has(prop)) {
         result[prop] = obj[prop]
       }
     }
@@ -91,9 +115,11 @@ const checkValueFromAnyObject = (
   valueToBeChecked: StoreValue
 ) => {
   let flag = false
-  let queue = [valueToBeChecked]
-  while (!flag && queue.length) {
-    const currentValue = queue.shift()
+  const deque = new Deque()
+  deque.push(valueToBeChecked)
+
+  while (!flag && !deque.isEmpty()) {
+    const currentValue = deque.shift()
     if (typeof currentValue !== 'object' || !currentValue) {
       continue
     }
@@ -101,12 +127,12 @@ const checkValueFromAnyObject = (
       if (
         value === target &&
         'id' in currentValue &&
-        currentValue.id === target
+        (currentValue as { id: string }).id === target
       ) {
         return true
       }
       if (value && typeof value === 'object') {
-        queue.push(value)
+        deque.push(value)
       }
       return false
     })
@@ -117,17 +143,24 @@ const checkValueFromAnyObject = (
 const basicInvalidateCache = (
   store: DepTrackingCache,
   cache: NormalizedCacheObject,
+  cacheKeys: string[],
   deletedKeys: string[]
 ) => {
   let deletedTopKeys = [...deletedKeys]
   let keysNeedToBeCheck = [...deletedKeys]
+  const checkedKeys = new Set<string>()
+
   let flag = true
   while (flag) {
     flag = false
     const temp = [...keysNeedToBeCheck]
     keysNeedToBeCheck = []
     for (const key of temp) {
-      for (const topKey of Object.keys(cache)) {
+      if (checkedKeys.has(key)) {
+        flag = true
+        continue
+      }
+      for (const topKey of cacheKeys) {
         if (
           topKey !== 'ROOT_QUERY' &&
           checkValueFromAnyObject(key, cache[topKey])
@@ -138,29 +171,36 @@ const basicInvalidateCache = (
           flag = true
         }
       }
+      checkedKeys.add(key)
     }
   }
 
-  const deletedQueryNames = []
   const rootQuery = cache['ROOT_QUERY']!
-  for (const queryName of Object.keys(rootQuery)) {
+  const rootQueryKeys = Object.keys(rootQuery)
+  const omitKeys = new Set<string>()
+  const deletedQueryNames = new Set<string>()
+  for (const queryName of rootQueryKeys) {
     for (const deletedKey of deletedTopKeys) {
+      if (omitKeys.has(queryName)) {
+        continue
+      }
       if (checkValueFromAnyObject(deletedKey, rootQuery[queryName])) {
-        const storeObject = store.get('ROOT_QUERY')
-        store.set('ROOT_QUERY', omit(storeObject, queryName))
-        deletedQueryNames.push(queryName.split('(')[0])
+        omitKeys.add(queryName)
+        deletedQueryNames.add(queryName.split('(')[0])
       }
     }
   }
 
   for (const key of deletedQueryNames) {
-    for (const queryName of Object.keys(rootQuery)) {
+    for (const queryName of rootQueryKeys) {
       if (queryName.includes(key)) {
-        const storeObject = store.get('ROOT_QUERY')
-        store.set('ROOT_QUERY', omit(storeObject, queryName))
+        omitKeys.add(queryName)
       }
     }
   }
+
+  const storeObject = store.get('ROOT_QUERY')
+  store.set('ROOT_QUERY', omit(storeObject, Array.from(omitKeys)))
 }
 
 export function patch(
@@ -198,10 +238,11 @@ export function patch(
       store.set('ROOT_QUERY', omit(storeObject, queryInRoot))
     }
 
-    if (
-      originKeyToBeDeleted &&
-      Object.keys(cacheData).includes(originKeyToBeDeleted)
-    ) {
+    const cacheKeys = sort(
+      Object.keys(cacheData),
+      typename ? this.typeFieldMap.get(typename)?.dependentTypes : undefined
+    )
+    if (originKeyToBeDeleted && Object.keys(cacheData).includes(originKeyToBeDeleted)) {
       store.delete(originKeyToBeDeleted)
       deletedTopKeys.push(originKeyToBeDeleted)
     } else if (typename) {
@@ -233,7 +274,7 @@ export function patch(
       }
     }
 
-    basicInvalidateCache(store, cacheData, deletedTopKeys)
+    basicInvalidateCache(store, cacheData, cacheKeys, deletedTopKeys)
   }
 
   // compared to cache.delete above, this, client.delete,  will refetch deleted active cache
