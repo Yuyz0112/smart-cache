@@ -18,6 +18,7 @@ interface CacheSelector {
 
 interface CacheDeleteOptions {
   refetch?: boolean
+  callback?: () => void
 }
 
 export type TypeFieldMap = Map<
@@ -36,7 +37,12 @@ type IdGetterObj = any
 
 declare module 'apollo-cache-inmemory' {
   interface InMemoryCache {
-    delete(typename?: string, value?: IdGetterObj, query?: string): void
+    delete(
+      typename?: string,
+      value?: IdGetterObj,
+      query?: string,
+      callback?: () => void
+    ): void
     typeFieldMap: TypeFieldMap
     setTypeFieldMap: (v: TypeFieldMap) => void
   }
@@ -144,63 +150,79 @@ const basicInvalidateCache = (
   store: DepTrackingCache,
   cache: NormalizedCacheObject,
   cacheKeys: string[],
-  deletedKeys: string[]
+  deletedKeys: string[],
+  callback?: () => void
 ) => {
   let deletedTopKeys = [...deletedKeys]
   let keysNeedToBeCheck = [...deletedKeys]
   const checkedKeys = new Set<string>()
 
-  let flag = true
-  while (flag) {
-    flag = false
-    const temp = [...keysNeedToBeCheck]
-    keysNeedToBeCheck = []
-    for (const key of temp) {
-      if (checkedKeys.has(key)) {
-        flag = true
-        continue
+  const checkDeletedKeys = (sliceSize: number, callback: () => void) => {
+    let flag = true
+    const checkSlice = () => {
+      if (!flag) {
+        callback()
+        return
       }
-      for (const topKey of cacheKeys) {
-        if (
-          topKey !== 'ROOT_QUERY' &&
-          checkValueFromAnyObject(key, cache[topKey])
-        ) {
-          store.delete(topKey)
-          deletedTopKeys.push(topKey)
-          keysNeedToBeCheck.push(topKey)
+
+      flag = false
+      const temp = keysNeedToBeCheck.splice(0, sliceSize)
+      for (const key of temp) {
+        if (checkedKeys.has(key)) {
           flag = true
+          continue
+        }
+        for (const topKey of cacheKeys) {
+          if (
+            topKey !== 'ROOT_QUERY' &&
+            checkValueFromAnyObject(key, cache[topKey])
+          ) {
+            store.delete(topKey)
+            deletedTopKeys.push(topKey)
+            keysNeedToBeCheck.push(topKey)
+            flag = true
+          }
+        }
+        checkedKeys.add(key)
+      }
+      setTimeout(checkSlice, 0)
+    }
+
+    checkSlice()
+  }
+
+  const SLICE_SIZE = 20
+  checkDeletedKeys(SLICE_SIZE, () => {
+    const rootQuery = cache['ROOT_QUERY']!
+    const rootQueryKeys = Object.keys(rootQuery)
+    const omitKeys = new Set<string>()
+    const deletedQueryNames = new Set<string>()
+    for (const queryName of rootQueryKeys) {
+      for (const deletedKey of deletedTopKeys) {
+        if (omitKeys.has(queryName)) {
+          continue
+        }
+        if (checkValueFromAnyObject(deletedKey, rootQuery[queryName])) {
+          omitKeys.add(queryName)
+          deletedQueryNames.add(queryName.split('(')[0])
         }
       }
-      checkedKeys.add(key)
     }
-  }
 
-  const rootQuery = cache['ROOT_QUERY']!
-  const rootQueryKeys = Object.keys(rootQuery)
-  const omitKeys = new Set<string>()
-  const deletedQueryNames = new Set<string>()
-  for (const queryName of rootQueryKeys) {
-    for (const deletedKey of deletedTopKeys) {
-      if (omitKeys.has(queryName)) {
-        continue
-      }
-      if (checkValueFromAnyObject(deletedKey, rootQuery[queryName])) {
-        omitKeys.add(queryName)
-        deletedQueryNames.add(queryName.split('(')[0])
+    for (const key of deletedQueryNames) {
+      for (const queryName of rootQueryKeys) {
+        if (queryName.includes(key)) {
+          omitKeys.add(queryName)
+        }
       }
     }
-  }
 
-  for (const key of deletedQueryNames) {
-    for (const queryName of rootQueryKeys) {
-      if (queryName.includes(key)) {
-        omitKeys.add(queryName)
-      }
-    }
-  }
+    const storeObject = store.get('ROOT_QUERY')
+    store.set('ROOT_QUERY', omit(storeObject, Array.from(omitKeys)))
 
-  const storeObject = store.get('ROOT_QUERY')
-  store.set('ROOT_QUERY', omit(storeObject, Array.from(omitKeys)))
+    // after all delete finished
+    callback?.()
+  })
 }
 
 export function patch(
@@ -209,15 +231,16 @@ export function patch(
 ) {
   InMemoryCache.prototype.typeFieldMap = new Map()
 
-  InMemoryCacheClass.prototype.setTypeFieldMap = function(v: TypeFieldMap) {
+  InMemoryCacheClass.prototype.setTypeFieldMap = function (v: TypeFieldMap) {
     this.typeFieldMap = v
   }
 
-  InMemoryCache.prototype.delete = function(
+  InMemoryCache.prototype.delete = function (
     this: InMemoryCache,
     typename?: string,
     value?: IdGetterObj,
-    query?: string
+    query?: string,
+    callback?: () => void
   ) {
     const store: DepTrackingCache = this['data']
     const cacheData: NormalizedCacheObject = store['data']
@@ -225,7 +248,7 @@ export function patch(
       this['config'].dataIdFromObject || defaultDataIdFromObject
 
     const originKeyToBeDeleted = value && dataIdFromObjectFn(value)
-    let deletedTopKeys = []
+    let deletedTopKeys: string[] = []
 
     const deleteQueryInRoot = (queryInRoot: string) => {
       const storeObject = store.get('ROOT_QUERY')
@@ -242,7 +265,11 @@ export function patch(
       Object.keys(cacheData),
       typename ? this.typeFieldMap.get(typename)?.dependentTypes : undefined
     )
-    if (originKeyToBeDeleted && Object.keys(cacheData).includes(originKeyToBeDeleted)) {
+
+    if (
+      originKeyToBeDeleted &&
+      Object.keys(cacheData).includes(originKeyToBeDeleted)
+    ) {
       store.delete(originKeyToBeDeleted)
       deletedTopKeys.push(originKeyToBeDeleted)
     } else if (typename) {
@@ -274,11 +301,11 @@ export function patch(
       }
     }
 
-    basicInvalidateCache(store, cacheData, cacheKeys, deletedTopKeys)
+    basicInvalidateCache(store, cacheData, cacheKeys, deletedTopKeys, callback)
   }
 
   // compared to cache.delete above, this, client.delete,  will refetch deleted active cache
-  ApolloClientClass.prototype.deleteCache = function(
+  ApolloClientClass.prototype.deleteCache = function (
     cacheSelector: CacheSelector,
     options?: CacheDeleteOptions
   ) {
@@ -287,48 +314,52 @@ export function patch(
       this.cache,
       typename,
       value,
-      query
+      query,
+      () => {
+        if (options && options.refetch === false) {
+          options.callback?.()
+          return
+        }
+
+        const queries: Map<string, QueryInfo> = this.queryManager['queries']
+
+        // Step 1
+        queries.forEach(({ observableQuery }) => {
+          // Step 2-1
+          if (!observableQuery) {
+            return
+          }
+
+          // Step 2-2
+          const { fetchPolicy, query, variables } = observableQuery.options
+          if (fetchPolicy === 'network-only' || fetchPolicy === 'no-cache') {
+            return
+          }
+
+          // Step 2-3
+          const cacheQuery = this.queryManager.transform(query).document
+          const getVariables: GetVariables = this.queryManager['getVariables']
+          const cacheVariables = getVariables.call(
+            this.queryManager,
+            cacheQuery,
+            variables
+          )
+          const { complete } = this.cache.diff({
+            query: cacheQuery,
+            variables: cacheVariables,
+            returnPartialData: true,
+            optimistic: false,
+          })
+
+          if (!complete) {
+            // Step 3
+            observableQuery.resetLastResults()
+            observableQuery.refetch()
+          }
+        })
+
+        options?.callback?.()
+      }
     )
-
-    if (options && options.refetch === false) {
-      return
-    }
-
-    const queries: Map<string, QueryInfo> = this.queryManager['queries']
-
-    // Step 1
-    queries.forEach(({ observableQuery }) => {
-      // Step 2-1
-      if (!observableQuery) {
-        return
-      }
-
-      // Step 2-2
-      const { fetchPolicy, query, variables } = observableQuery.options
-      if (fetchPolicy === 'network-only' || fetchPolicy === 'no-cache') {
-        return
-      }
-
-      // Step 2-3
-      const cacheQuery = this.queryManager.transform(query).document
-      const getVariables: GetVariables = this.queryManager['getVariables']
-      const cacheVariables = getVariables.call(
-        this.queryManager,
-        cacheQuery,
-        variables
-      )
-      const { complete } = this.cache.diff({
-        query: cacheQuery,
-        variables: cacheVariables,
-        returnPartialData: true,
-        optimistic: false,
-      })
-
-      if (!complete) {
-        // Step 3
-        observableQuery.resetLastResults()
-        observableQuery.refetch()
-      }
-    })
   }
 }
