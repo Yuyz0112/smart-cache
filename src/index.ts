@@ -2,13 +2,13 @@ import { StoreValue, IdValue } from 'apollo-utilities'
 import {
   InMemoryCache,
   NormalizedCacheObject,
+  StoreObject,
   defaultDataIdFromObject,
 } from 'apollo-cache-inmemory'
 import { DepTrackingCache } from 'apollo-cache-inmemory/lib/depTrackingCache'
 import { ApolloClient, OperationVariables } from 'apollo-client'
 import { DocumentNode } from 'graphql'
 import { QueryInfo } from 'apollo-client/core/QueryManager'
-import * as Deque from 'double-ended-queue'
 
 interface CacheSelector {
   typename?: string
@@ -115,35 +115,28 @@ function omit(obj: any, remove: string[] | string) {
   return result
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
-
-const checkValueFromAnyObject = (
-  target: string,
-  valueToBeChecked: StoreValue
-) => {
-  let flag = false
-  const deque = new Deque()
-  deque.push(valueToBeChecked)
-
-  while (!flag && !deque.isEmpty()) {
-    const currentValue = deque.shift()
-    if (typeof currentValue !== 'object' || !currentValue) {
-      continue
+function extractIds(obj: StoreValue, ids: Set<string>) {
+  if (obj && typeof obj === 'object') {
+    if ('id' in obj) {
+      ids.add(obj.id)
     }
-    flag = Object.values(currentValue).some(value => {
-      if (
-        value === target &&
-        'id' in currentValue &&
-        (currentValue as { id: string }).id === target
-      ) {
-        return true
-      }
-      if (value && typeof value === 'object') {
-        deque.push(value)
-      }
-      return false
-    })
+    Object.values(obj).forEach(value => extractIds(value, ids))
   }
-  return flag
+}
+
+function createTopKeyIdMap(
+  obj: NormalizedCacheObject | StoreObject
+): Map<string, Set<string>> {
+  const idMap = new Map<string, Set<string>>()
+
+  for (const key in obj) {
+    const ids = new Set<string>()
+    extractIds(obj[key], ids)
+
+    if (ids.size) idMap.set(key, ids)
+  }
+
+  return idMap
 }
 
 const basicInvalidateCache = (
@@ -153,15 +146,18 @@ const basicInvalidateCache = (
   deletedKeys: string[],
   callback?: () => void
 ) => {
+  const topKeyIdMap = createTopKeyIdMap(cache)
+
   let deletedTopKeys = [...deletedKeys]
   let keysNeedToBeCheck = [...deletedKeys]
-  const checkedKeys = new Set<string>()
 
+  const checkedKeys = new Set<string>()
   const checkDeletedKeys = (sliceSize: number, callback: () => void) => {
     let flag = true
     const checkSlice = () => {
       if (!flag) {
         checkedKeys.clear()
+        topKeyIdMap.clear()
         callback()
         return
       }
@@ -174,10 +170,7 @@ const basicInvalidateCache = (
           continue
         }
         for (const topKey of cacheKeys) {
-          if (
-            topKey !== 'ROOT_QUERY' &&
-            checkValueFromAnyObject(key, cache[topKey])
-          ) {
+          if (topKey !== 'ROOT_QUERY' && topKeyIdMap.get(topKey)?.has(key)) {
             store.delete(topKey)
             deletedTopKeys.push(topKey)
             keysNeedToBeCheck.push(topKey)
@@ -186,6 +179,7 @@ const basicInvalidateCache = (
         }
         checkedKeys.add(key)
       }
+
       setTimeout(checkSlice, 0)
     }
 
@@ -195,6 +189,8 @@ const basicInvalidateCache = (
   const SLICE_SIZE = 20
   checkDeletedKeys(SLICE_SIZE, () => {
     const rootQuery = cache['ROOT_QUERY']!
+    const rootQueryKeyIdMap = createTopKeyIdMap(rootQuery)
+
     const rootQueryKeys = Object.keys(rootQuery)
     const omitKeys = new Set<string>()
     const deletedQueryNames = new Set<string>()
@@ -203,7 +199,7 @@ const basicInvalidateCache = (
         if (omitKeys.has(queryName)) {
           continue
         }
-        if (checkValueFromAnyObject(deletedKey, rootQuery[queryName])) {
+        if (rootQueryKeyIdMap.get(queryName)?.has(deletedKey)) {
           omitKeys.add(queryName)
           deletedQueryNames.add(queryName.split('(')[0])
         }
