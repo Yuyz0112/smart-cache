@@ -161,6 +161,7 @@ const basicInvalidateCache = (
     let flag = true
     const checkSlice = () => {
       if (!flag) {
+        checkedKeys.clear()
         callback()
         return
       }
