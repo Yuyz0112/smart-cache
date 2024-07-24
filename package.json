@@ -10,7 +10,8 @@
     "build": "tsc && rollup --config && cp build/codegen.js* lib/",
     "typings": "tsc -d --emitDeclarationOnly --declarationDir typings",
     "release": "release-it",
-    "test": "cross-env TS_NODE_CACHE=false TS_NODE_FILES=true mocha -r ts-node/register test/**/*.spec.ts"
+    "test": "cross-env TS_NODE_CACHE=false TS_NODE_FILES=true mocha -r ts-node/register test/**/*.spec.ts",
+    "benchmark": "cross-env TS_NODE_CACHE=false TS_NODE_FILES=true ts-node benchmark/index.ts"
   },
   "keywords": [
     "apollo-client",
@@ -37,16 +38,19 @@
   },
   "devDependencies": {
     "@types/chai": "^4.1.7",
+    "@types/benchmark": "1.0.31",
+    "@types/double-ended-queue": "^2.1.7",
     "@types/graphql": "^14.2.3",
     "@types/mocha": "^5.2.7",
     "@types/node": "^12.0.0",
-    "@types/double-ended-queue": "^2.1.7",
     "@typescript-eslint/eslint-plugin": "^1.11.0",
     "@typescript-eslint/parser": "^1.11.0",
     "apollo-cache-inmemory": "^1.6.3",
     "apollo-client": "^2.6.4",
     "apollo-link-schema": "^1.2.3",
     "apollo-utilities": "^1.3.2",
+    "benchmark": "^2.1.4",
+    "double-ended-queue": "^2.1.0-0",
     "chai": "^4.2.0",
     "cross-env": "^5.2.0",
     "eslint": "^6.0.1",
@@ -61,8 +65,5 @@
     "rollup-plugin-typescript2": "^0.21.2",
     "ts-node": "^8.3.0",
     "typescript": "^3.5.3"
-  },
-  "dependencies": {
-    "double-ended-queue": "^2.1.0-0"
   }
 }

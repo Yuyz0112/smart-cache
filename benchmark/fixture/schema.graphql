@@ -1,0 +1,40 @@
+type Query {
+  getUser(id: String!): User!
+  getPosts(page: Int!): [Post!]!
+  fuzzy: [Fuzzy!]!
+  nested: Nested!
+  noId: NoId
+  emptyUsers: [User!]!
+  pureText: String
+}
+
+type Mutation {
+  deletePost(id: String!): String!
+}
+
+type User {
+  id: String!
+  posts: [Post!]!
+}
+
+type Post {
+  id: String!
+  title: String!
+}
+
+type Fuzzy {
+  id: String!
+  posts: String!
+  content: String!
+}
+
+type Nested {
+  id: String!
+  users: [User!]!
+  posts: [Post!]!
+  fuzzy: [Fuzzy!]!
+}
+
+type NoId {
+  content: String!
+}
