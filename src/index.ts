@@ -2,6 +2,7 @@ import { StoreValue, IdValue } from 'apollo-utilities'
 import {
   InMemoryCache,
   NormalizedCacheObject,
+  StoreObject,
   defaultDataIdFromObject,
 } from 'apollo-cache-inmemory'
 import { DepTrackingCache } from 'apollo-cache-inmemory/lib/depTrackingCache'
@@ -158,18 +159,10 @@ const basicInvalidateCache = (
   const checkedKeys = new Set<string>()
 
   const checkDeletedKeys = (sliceSize: number, callback: () => void) => {
-    let flag = true
     const checkSlice = () => {
-      if (!flag) {
-        callback()
-        return
-      }
-
-      flag = false
       const temp = keysNeedToBeCheck.splice(0, sliceSize)
       for (const key of temp) {
         if (checkedKeys.has(key)) {
-          flag = true
           continue
         }
         for (const topKey of cacheKeys) {
@@ -180,12 +173,17 @@ const basicInvalidateCache = (
             store.delete(topKey)
             deletedTopKeys.push(topKey)
             keysNeedToBeCheck.push(topKey)
-            flag = true
           }
         }
         checkedKeys.add(key)
       }
-      setTimeout(checkSlice, 0)
+
+      if (keysNeedToBeCheck.length) {
+        setTimeout(checkSlice, 0)
+      } else {
+        checkedKeys.clear()
+        callback()
+      }
     }
 
     checkSlice()
@@ -268,7 +266,7 @@ export function patch(
 
     if (
       originKeyToBeDeleted &&
-      Object.keys(cacheData).includes(originKeyToBeDeleted)
+      cacheKeys.includes(originKeyToBeDeleted)
     ) {
       store.delete(originKeyToBeDeleted)
       deletedTopKeys.push(originKeyToBeDeleted)
@@ -283,7 +281,7 @@ export function patch(
           deleteQueryInRoot(query)
         }
       }
-      for (const topKey of Object.keys(cacheData)) {
+      for (const topKey of cacheKeys) {
         const currentTopKeyType = topKey.split(':')[0]
         if (filedsForDelete.dependentTypes.has(currentTopKeyType)) {
           store.delete(topKey)
@@ -301,7 +299,11 @@ export function patch(
       }
     }
 
-    basicInvalidateCache(store, cacheData, cacheKeys, deletedTopKeys, callback)
+    if (deletedTopKeys.length) {
+      basicInvalidateCache(store, cacheData, cacheKeys, deletedTopKeys, callback)
+    } else {
+      callback?.()
+    }
   }
 
   // compared to cache.delete above, this, client.delete,  will refetch deleted active cache

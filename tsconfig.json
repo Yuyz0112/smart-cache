@@ -12,5 +12,5 @@
     "downlevelIteration": true
   },
   "compileOnSave": true,
-  "exclude": ["test", "typings"]
+  "exclude": ["test", "typings", "benchmark"]
 }

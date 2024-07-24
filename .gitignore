@@ -6,5 +6,7 @@ dist
 es
 lib
 build
+benchmark/**/*.js
+benchmark/**/*.d.ts
 
 typings
