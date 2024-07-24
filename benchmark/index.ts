@@ -107,7 +107,8 @@ benchmark('deleteCache 10x data', {
   benchmarkFn: (done, { client, cacheData }) => {
     const typename = 'User'
     client.cache.restore(cacheData)
-    client.deleteCache({ typename }, { callback: done })
+    client.deleteCache({ typename })
+    done()
   },
 })
 
@@ -125,7 +126,8 @@ benchmark('deleteCache 100x data', {
   benchmarkFn: (done, { client, cacheData }) => {
     const typename = 'User'
     client.cache.restore(cacheData)
-    client.deleteCache({ typename }, { callback: done })
+    client.deleteCache({ typename })
+    done()
   },
 })
 
@@ -143,7 +145,8 @@ benchmark('deleteCache 500x data', {
   benchmarkFn: (done, { client, cacheData }) => {
     const typename = 'User'
     client.cache.restore(cacheData)
-    client.deleteCache({ typename }, { callback: done })
+    client.deleteCache({ typename })
+    done()
   },
 })
 
@@ -161,7 +164,8 @@ benchmark('deleteCache 1000x data', {
   benchmarkFn: (done, { client, cacheData }) => {
     const typename = 'User'
     client.cache.restore(cacheData)
-    client.deleteCache({ typename }, { callback: done })
+    client.deleteCache({ typename })
+    done()
   },
 })
 
