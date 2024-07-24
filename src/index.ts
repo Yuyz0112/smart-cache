@@ -9,7 +9,6 @@ import { DepTrackingCache } from 'apollo-cache-inmemory/lib/depTrackingCache'
 import { ApolloClient, OperationVariables } from 'apollo-client'
 import { DocumentNode } from 'graphql'
 import { QueryInfo } from 'apollo-client/core/QueryManager'
-import * as Deque from 'double-ended-queue'
 
 interface CacheSelector {
   typename?: string
@@ -19,7 +18,6 @@ interface CacheSelector {
 
 interface CacheDeleteOptions {
   refetch?: boolean
-  callback?: () => void
 }
 
 export type TypeFieldMap = Map<
@@ -38,12 +36,7 @@ type IdGetterObj = any
 
 declare module 'apollo-cache-inmemory' {
   interface InMemoryCache {
-    delete(
-      typename?: string,
-      value?: IdGetterObj,
-      query?: string,
-      callback?: () => void
-    ): void
+    delete(typename?: string, value?: IdGetterObj, query?: string): void
     typeFieldMap: TypeFieldMap
     setTypeFieldMap: (v: TypeFieldMap) => void
   }
@@ -117,110 +110,99 @@ function omit(obj: any, remove: string[] | string) {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const checkValueFromAnyObject = (
-  target: string,
-  valueToBeChecked: StoreValue
-) => {
-  let flag = false
-  const deque = new Deque()
-  deque.push(valueToBeChecked)
-
-  while (!flag && !deque.isEmpty()) {
-    const currentValue = deque.shift()
-    if (typeof currentValue !== 'object' || !currentValue) {
-      continue
+function extractIds(obj: StoreValue, ids: Set<string>) {
+  if (obj && typeof obj === 'object') {
+    if ('id' in obj) {
+      ids.add(obj.id)
+      if ((obj as { type: string }).type === 'id') {
+        return
+      }
     }
-    flag = Object.values(currentValue).some(value => {
-      if (
-        value === target &&
-        'id' in currentValue &&
-        (currentValue as { id: string }).id === target
-      ) {
-        return true
-      }
-      if (value && typeof value === 'object') {
-        deque.push(value)
-      }
-      return false
-    })
+    Object.values(obj).forEach(value => extractIds(value, ids))
   }
-  return flag
+}
+
+function createTopKeyIdMap(
+  obj: NormalizedCacheObject | StoreObject
+): Map<string, Set<string>> {
+  const idMap = new Map<string, Set<string>>()
+
+  for (const key in obj) {
+    const ids = new Set<string>()
+    extractIds(obj[key], ids)
+
+    if (ids.size) idMap.set(key, ids)
+  }
+
+  return idMap
 }
 
 const basicInvalidateCache = (
   store: DepTrackingCache,
   cache: NormalizedCacheObject,
-  cacheKeys: string[],
-  deletedKeys: string[],
-  callback?: () => void
+  deletedKeys: string[]
 ) => {
-  let deletedTopKeys = [...deletedKeys]
+  const topKeyIdMap = createTopKeyIdMap(cache)
+
+  const deletedTopKeys = new Set(deletedKeys)
   let keysNeedToBeCheck = [...deletedKeys]
+
   const checkedKeys = new Set<string>()
-
-  const checkDeletedKeys = (sliceSize: number, callback: () => void) => {
-    const checkSlice = () => {
-      const temp = keysNeedToBeCheck.splice(0, sliceSize)
-      for (const key of temp) {
-        if (checkedKeys.has(key)) {
-          continue
-        }
-        for (const topKey of cacheKeys) {
-          if (
-            topKey !== 'ROOT_QUERY' &&
-            checkValueFromAnyObject(key, cache[topKey])
-          ) {
-            store.delete(topKey)
-            deletedTopKeys.push(topKey)
-            keysNeedToBeCheck.push(topKey)
-          }
-        }
-        checkedKeys.add(key)
-      }
-
-      if (keysNeedToBeCheck.length) {
-        setTimeout(checkSlice, 0)
-      } else {
-        checkedKeys.clear()
-        callback()
-      }
+  for (let i = 0; i < keysNeedToBeCheck.length; i++) {
+    const key = keysNeedToBeCheck[i]
+    if (checkedKeys.has(key)) {
+      continue
     }
-
-    checkSlice()
+    topKeyIdMap.forEach((idSet, topKey) => {
+      if (deletedTopKeys.has(topKey)) {
+        return
+      }
+      if (topKey !== 'ROOT_QUERY' && idSet.has(key)) {
+        store.delete(topKey)
+        deletedTopKeys.add(topKey)
+        keysNeedToBeCheck.push(topKey)
+      }
+    })
+    checkedKeys.add(key)
   }
 
-  const SLICE_SIZE = 20
-  checkDeletedKeys(SLICE_SIZE, () => {
-    const rootQuery = cache['ROOT_QUERY']!
-    const rootQueryKeys = Object.keys(rootQuery)
-    const omitKeys = new Set<string>()
-    const deletedQueryNames = new Set<string>()
-    for (const queryName of rootQueryKeys) {
-      for (const deletedKey of deletedTopKeys) {
-        if (omitKeys.has(queryName)) {
-          continue
-        }
-        if (checkValueFromAnyObject(deletedKey, rootQuery[queryName])) {
-          omitKeys.add(queryName)
-          deletedQueryNames.add(queryName.split('(')[0])
-        }
+  // clear them to release memory ASAP
+  keysNeedToBeCheck = []
+  checkedKeys.clear()
+  topKeyIdMap.clear()
+
+  const rootQuery = cache['ROOT_QUERY']!
+  const rootQueryKeyIdMap = createTopKeyIdMap(rootQuery)
+
+  const omitKeys = new Set<string>()
+  const deletedQueryNames = new Set<string>()
+  rootQueryKeyIdMap.forEach((idSet, queryName) => {
+    if (omitKeys.has(queryName)) {
+      return
+    }
+    for (const deletedKey of deletedTopKeys) {
+      if (idSet.has(deletedKey)) {
+        omitKeys.add(queryName)
+        deletedQueryNames.add(queryName.split('(')[0])
       }
     }
-
-    for (const key of deletedQueryNames) {
-      for (const queryName of rootQueryKeys) {
-        if (queryName.includes(key)) {
-          omitKeys.add(queryName)
-        }
-      }
-    }
-
-    const storeObject = store.get('ROOT_QUERY')
-    store.set('ROOT_QUERY', omit(storeObject, Array.from(omitKeys)))
-
-    // after all delete finished
-    callback?.()
   })
+
+  // clear them to release memory ASAP
+  deletedTopKeys.clear()
+  rootQueryKeyIdMap.clear()
+
+  for (const key of deletedQueryNames) {
+    for (const queryName of Object.keys(rootQuery)) {
+      if (queryName.includes(key)) {
+        omitKeys.add(queryName)
+      }
+    }
+  }
+
+  const storeObject = store.get('ROOT_QUERY')
+  store.set('ROOT_QUERY', omit(storeObject, Array.from(omitKeys)))
+  omitKeys.clear()
 }
 
 export function patch(
@@ -237,8 +219,7 @@ export function patch(
     this: InMemoryCache,
     typename?: string,
     value?: IdGetterObj,
-    query?: string,
-    callback?: () => void
+    query?: string
   ) {
     const store: DepTrackingCache = this['data']
     const cacheData: NormalizedCacheObject = store['data']
@@ -259,15 +240,8 @@ export function patch(
       store.set('ROOT_QUERY', omit(storeObject, queryInRoot))
     }
 
-    const cacheKeys = sort(
-      Object.keys(cacheData),
-      typename ? this.typeFieldMap.get(typename)?.dependentTypes : undefined
-    )
-
-    if (
-      originKeyToBeDeleted &&
-      cacheKeys.includes(originKeyToBeDeleted)
-    ) {
+    const cacheKeys = Object.keys(cacheData)
+    if (originKeyToBeDeleted && cacheKeys.includes(originKeyToBeDeleted)) {
       store.delete(originKeyToBeDeleted)
       deletedTopKeys.push(originKeyToBeDeleted)
     } else if (typename) {
@@ -300,9 +274,7 @@ export function patch(
     }
 
     if (deletedTopKeys.length) {
-      basicInvalidateCache(store, cacheData, cacheKeys, deletedTopKeys, callback)
-    } else {
-      callback?.()
+      basicInvalidateCache(store, cacheData, deletedTopKeys)
     }
   }
 
@@ -316,52 +288,48 @@ export function patch(
       this.cache,
       typename,
       value,
-      query,
-      () => {
-        if (options && options.refetch === false) {
-          options.callback?.()
-          return
-        }
-
-        const queries: Map<string, QueryInfo> = this.queryManager['queries']
-
-        // Step 1
-        queries.forEach(({ observableQuery }) => {
-          // Step 2-1
-          if (!observableQuery) {
-            return
-          }
-
-          // Step 2-2
-          const { fetchPolicy, query, variables } = observableQuery.options
-          if (fetchPolicy === 'network-only' || fetchPolicy === 'no-cache') {
-            return
-          }
-
-          // Step 2-3
-          const cacheQuery = this.queryManager.transform(query).document
-          const getVariables: GetVariables = this.queryManager['getVariables']
-          const cacheVariables = getVariables.call(
-            this.queryManager,
-            cacheQuery,
-            variables
-          )
-          const { complete } = this.cache.diff({
-            query: cacheQuery,
-            variables: cacheVariables,
-            returnPartialData: true,
-            optimistic: false,
-          })
-
-          if (!complete) {
-            // Step 3
-            observableQuery.resetLastResults()
-            observableQuery.refetch()
-          }
-        })
-
-        options?.callback?.()
-      }
+      query
     )
+
+    if (options && options.refetch === false) {
+      return
+    }
+
+    const queries: Map<string, QueryInfo> = this.queryManager['queries']
+
+    // Step 1
+    queries.forEach(({ observableQuery }) => {
+      // Step 2-1
+      if (!observableQuery) {
+        return
+      }
+
+      // Step 2-2
+      const { fetchPolicy, query, variables } = observableQuery.options
+      if (fetchPolicy === 'network-only' || fetchPolicy === 'no-cache') {
+        return
+      }
+
+      // Step 2-3
+      const cacheQuery = this.queryManager.transform(query).document
+      const getVariables: GetVariables = this.queryManager['getVariables']
+      const cacheVariables = getVariables.call(
+        this.queryManager,
+        cacheQuery,
+        variables
+      )
+      const { complete } = this.cache.diff({
+        query: cacheQuery,
+        variables: cacheVariables,
+        returnPartialData: true,
+        optimistic: false,
+      })
+
+      if (!complete) {
+        // Step 3
+        observableQuery.resetLastResults()
+        observableQuery.refetch()
+      }
+    })
   }
 }
