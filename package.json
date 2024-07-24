@@ -1,6 +1,6 @@
 {
   "name": "smart-cache-invalidation",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Cache invalidation tools for apollo-client's in-memory-cache.",
   "bin": "build/cli.js",
   "main": "lib/index.js",
